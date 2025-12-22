@@ -4,6 +4,43 @@ Scripts relacionados à segurança do sistema Linux.
 
 ## 📋 Scripts Disponíveis
 
+### wazuh-agent-install.sh
+
+**Descrição**: Script de deployment automatizado do Wazuh Agent 4.14.1 para Proxmox VE com validações completas e tratamento de erros
+
+**Uso**:
+```bash
+sudo bash wazuh-agent-install.sh
+```
+
+**Variáveis de Ambiente**:
+- `WAZUH_MANAGER`: Endereço do servidor Wazuh Manager (padrão: soc.expertlevel.lan)
+- `WAZUH_MANAGER_PORT`: Porta do Wazuh Manager (padrão: 1514)
+
+**Requisitos**:
+- Sistema: Debian 11/12, Ubuntu 20.04/22.04 (Proxmox 7/8/9)
+- Privilégios: root
+- Conexão com internet para download de pacotes
+
+**Características**:
+- Validação de pré-requisitos do sistema
+- Instalação automática do repositório e GPG keys
+- Configuração automática do agente
+- Backup de configurações anteriores
+- Logging detalhado de todas as operações
+- Validação pós-instalação
+
+**Exemplo**:
+```bash
+# Instalação padrão
+sudo bash wazuh-agent-install.sh
+
+# Com servidor customizado
+WAZUH_MANAGER=seu-servidor.com sudo bash wazuh-agent-install.sh
+```
+
+---
+
 ### system-hardening.sh
 
 **Descrição**: Hardening automático de sistema Linux seguindo best practices

@@ -4,6 +4,53 @@ Scripts para administração e configuração de sistemas Linux.
 
 ## 📋 Scripts Disponíveis
 
+### DynFi_Manager_installer.sh
+
+**Descrição**: Script de instalação automatizada do DynFi Manager com suporte multi-plataforma
+
+**Uso**:
+```bash
+sudo bash DynFi_Manager_installer.sh [opções]
+```
+
+**Opções**:
+- `-d, --distro <distro>`: Forçar instalação para distribuição específica (ubuntu, debian, macos)
+- `-u, --uninstall`: Desinstalar DynFi Manager e todos os componentes
+- `-h, --help`: Mostra ajuda
+
+**Requisitos**:
+- Sistema: Ubuntu 16.04+, Debian 9+, macOS (com Homebrew)
+- Privilégios: root (sudo em macOS)
+- Conexão com internet para download de pacotes
+- OpenJDK 11 JRE (instalado automaticamente)
+- MongoDB (instalado automaticamente)
+
+**Características**:
+- Instalação automática de OpenJDK 11 JRE
+- Configuração automática do MongoDB com seleção de versão por OS
+- Instalação e configuração do DynFi Manager
+- Suporte para desinstalação completa
+- Prompts interativos para customização
+- Validação de sistema operacional
+
+**Exemplo**:
+```bash
+# Instalação padrão
+sudo bash DynFi_Manager_installer.sh
+
+# Forçar instalação para Ubuntu
+sudo bash DynFi_Manager_installer.sh -d ubuntu
+
+# Desinstalar
+sudo bash DynFi_Manager_installer.sh -u
+```
+
+**Licença**: GNU GPL v3.0
+Copyright (c) 2022 Kevin HUART for DynFi  
+Copyright (c) 2023 Gregory BERNARD for DynFi
+
+---
+
 ### update-system.sh
 
 **Descrição**: Script para atualização completa do sistema com backup e validação
