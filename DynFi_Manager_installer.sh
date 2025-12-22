@@ -154,7 +154,7 @@ function install_ubuntu()
 				systemctl daemon-reload >> DFM_installer.log
 				if [[ $(systemctl start mongod | grep -i -c "Failed") -gt 0 ]]; then
 					echo -e "Installer has encountered an issue starting  ${RED}MongoDB${NC}. Please check DFM_installer.log"
-					tail -f /var/log/mongodb/mongod.log >> DFM_installer.log
+					tail -n 50 /var/log/mongodb/mongod.log >> DFM_installer.log
 					exit
 				fi
 			fi
@@ -361,7 +361,7 @@ function install_debian()
 				systemctl daemon-reload >> DFM_installer.log
 				if [[ $(systemctl start mongod | grep -i "Failed" | wc -l) -gt 0 ]]; then
 					echo -e "Installer has encountered an issue starting ${RED}MongoDB${NC}. Please check DFM_installer.log"
-					tail -f /var/log/mongodb/mongod.log >> DFM_installer.log
+					tail -n 50 /var/log/mongodb/mongod.log >> DFM_installer.log
 					exit
 				fi
 			fi
@@ -376,7 +376,7 @@ function install_debian()
 			fi
 		else
 			if [[ $(service mongod status | grep -i "active (running)" | wc -l) -eq 0 ]]; then
-				echo -e "${RED}MongoDB${NC} didn't start  properly. Please check /var/log/mongodb/mongod.log and DFM_installer.log"
+				echo -e "${RED}MongoDB${NC} didn't start properly. Please check /var/log/mongodb/mongod.log and DFM_installer.log"
 				service mongod status >> DFM_installer.log
 				exit
 			fi
