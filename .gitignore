@@ -1,0 +1,51 @@
+# Arquivos de log
+*.log
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Backups
+*.bak
+*.backup
+
+# Cache
+.cache/
+__pycache__/
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets e configurações locais
+.env
+.env.local
+secrets/
+*.key
+*.pem
+*.crt
+*.cert
+
+# Diretórios de build/output
+build/
+dist/
+out/
+
+# Node modules (caso alguém adicione scripts Node.js)
+node_modules/
+
+# Python (caso alguém adicione scripts Python)
+venv/
+*.pyc
+
+# Testes
+test-output/
+coverage/
