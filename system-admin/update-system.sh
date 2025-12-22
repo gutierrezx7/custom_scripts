@@ -77,7 +77,8 @@ backup_package_list() {
     msg_info "Fazendo backup da lista de pacotes..."
     mkdir -p "$BACKUP_DIR"
     
-    local distro=$(detect_distro)
+    local distro
+    distro=$(detect_distro)
     case $distro in
         debian)
             dpkg --get-selections > "$BACKUP_DIR/packages-$(date +%Y%m%d).txt"
@@ -141,7 +142,8 @@ main() {
     check_root
     backup_package_list
     
-    local distro=$(detect_distro)
+    local distro
+    distro=$(detect_distro)
     case $distro in
         debian)
             update_debian

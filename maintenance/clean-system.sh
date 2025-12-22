@@ -15,12 +15,10 @@ set -o pipefail
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
 readonly NC='\033[0m'
 
 DRY_RUN=false
 DEEP_CLEAN=false
-FREED_SPACE=0
 
 msg_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -122,7 +120,8 @@ main() {
     
     check_root
     
-    local space_before=$(get_free_space)
+    local space_before
+    space_before=$(get_free_space)
     
     clean_apt_cache
     clean_temp_files
@@ -134,7 +133,8 @@ main() {
         deep_clean
     fi
     
-    local space_after=$(get_free_space)
+    local space_after
+    space_after=$(get_free_space)
     local freed=$((space_after - space_before))
     
     msg_info "Limpeza concluída!"
