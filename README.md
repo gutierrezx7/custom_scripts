@@ -39,6 +39,7 @@ Scripts para administração e configuração de sistemas Linux.
 - Gerenciamento de usuários e permissões
 - Configuração de serviços
 - Atualizações automáticas do sistema
+- **DynFi Manager Installer** - Script de instalação automatizada do DynFi Manager (suporte para Ubuntu, Debian e macOS)
 
 ### 🛠️ [Maintenance](./maintenance/)
 Scripts para manutenção e otimização do sistema.
@@ -75,6 +76,7 @@ Scripts relacionados à segurança do sistema.
 - Hardening de sistema
 - Auditoria de segurança
 - Gerenciamento de certificados SSL
+- **Wazuh Agent Installer** - Script de deployment automatizado do Wazuh Agent 4.14.1 para Proxmox VE
 
 ### 🚀 [Automation](./automation/)
 Scripts para automação e deployment.
