@@ -442,7 +442,7 @@ start_wazuh_agent() {
 validate_installation() {
     log_info "=== FASE 7: VALIDANDO INSTALAÇÃO ==="
     
-    # 1. Verificar processso
+    # 1. Verificar processo
     log_info "Verificando processo wazuh-agent..."
     if pgrep -f "wazuh-agentd" > /dev/null; then
         log_success "Processo wazuh-agentd detectado"
@@ -574,7 +574,7 @@ main() {
 ║        Deployment com Validações e Tratamento de Erros                     ║
 ║                                                                              ║
 ║        Data: $(date '+%Y-%m-%d %H:%M:%S')                                      ║
-║        Manager: WAZUH_MANAGER_PLACEHOLDER                                  ║
+║        Manager: ${WAZUH_MANAGER}                                           ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 EOFHEADER
