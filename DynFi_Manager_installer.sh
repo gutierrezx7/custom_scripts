@@ -277,8 +277,8 @@ function uninstall_ubuntu()
 			service mongod stop >> DFM_installer.log
 		fi
 		apt-get -y purge --allow-change-held-packages mongodb-org* >> DFM_installer.log
-		rm -r /var/log/mongodb >> DFM_installer.log
-		rm -r /var/lib/mongodb >> DFM_installer.log
+		rm -rf /var/log/mongodb >> DFM_installer.log
+		rm -rf /var/lib/mongodb >> DFM_installer.log
 		echo "Done"
 	fi
 }
@@ -595,7 +595,7 @@ while getopts 'd:u' option; do
 				echo -e "For which version of ${BLUE}Debian${NC} you want to run this script?"
 				echo "<1> 11 (Bullseye)"
 				echo "<2> 10 (Buster)     "
-				echo "<3>  9 (Stretchecho)"
+				echo "<3>  9 (Stretch)"
 				res=0
 				while [[ $res -eq 0 ]]; do
 					echo -n "Your answer <1-3>: "
@@ -610,7 +610,7 @@ while getopts 'd:u' option; do
 							res=1
 							;;
 						3) 
-							distro="$distro stretchecho"
+							distro="$distro stretch"
 							res=1
 							;;
 						* )
@@ -630,7 +630,7 @@ while getopts 'd:u' option; do
 			echo -e -n "Do you want to uninstall ${BLUE}DynFi Manager${NC}? <yes|no>: "
 			read input
 			if [[ $(echo $input | grep -i 'yes' | wc -l) -ne 1 || $(echo $input | grep -i 'yes' | wc -c) -ne 4 ]]; then
-				echo "No modification as been made."
+				echo "No modification has been made."
 				exit
 			fi
 			;;

@@ -6,8 +6,8 @@ This repository contains custom utility scripts.
 
 ### Description
 `DynFi_Manager_installer.sh` is an installation script for DynFi Manager that supports:
-- **Ubuntu** 16.04, 18.04, 20.04, 22.04, and 24.04
-- **Debian** 9 (Stretch), 10 (Buster), 11 (Bullseye), and 12 (Bookworm)
+- **Ubuntu** 16.04 (Xenial), 18.04 (Bionic), 20.04 (Focal), 22.04 (Jammy), and newer versions
+- **Debian** 9 (Stretch), 10 (Buster), 11 (Bullseye), 12 (Bookworm), and newer versions
 - **macOS** (with Homebrew)
 
 ### Features
