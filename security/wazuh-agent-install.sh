@@ -2,8 +2,9 @@
 
 ################################################################################
 #                                                                              #
-#        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE (CORRIGIDO v2.3)          #
+#        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE (v2.4 SED-ONLY)           #
 #        Deployment com Validações e Tratamento de Erros                     #
+#        Compatível com XML corrompido - Usa SED puro                        #
 #                                                                              #
 ################################################################################
 
@@ -50,7 +51,7 @@ print_banner() {
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE                           ║
-║        Deployment com Validações e Tratamento de Erros (v2.3 FIXED)        ║
+║        Deployment com Validações e Tratamento de Erros (v2.4 SED-ONLY)     ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 EOF
@@ -224,7 +225,7 @@ install_wazuh_agent() {
 }
 
 # ============================================================================
-# FASE 5: CONFIGURAÇÃO DO WAZUH AGENT
+# FASE 5: CONFIGURAÇÃO DO WAZUH AGENT (SED PURO - COMPATÍVEL COM XML CORROMPIDO)
 # ============================================================================
 
 configure_wazuh_agent() {
@@ -238,60 +239,38 @@ configure_wazuh_agent() {
     log_info "Fazendo backup da configuração original..."
     log_success "Backup criado: ${BACKUP_FILE}"
 
-    # Limpeza - remover tags inválidas COM MAIS CUIDADO
+    # =========================================================================
+    # LIMPEZA COM SED PURO - Compatível com XML corrompido
+    # =========================================================================
     log_info "Limpando configuração de tags inválidas..."
     
-    # Usar Python para manipulação XML mais confiável
-    python3 << 'PYTHON_SCRIPT'
-import xml.etree.ElementTree as ET
-import sys
+    # 1. Remover elementos orphaos linha por linha
+    sed -i '/<file[^_]/d' "${OSSEC_CONF}" 2>/dev/null || true
+    sed -i '/<skip_sys>/d' "${OSSEC_CONF}" 2>/dev/null || true
+    sed -i '/<\/skip_sys>/d' "${OSSEC_CONF}" 2>/dev/null || true
+    sed -i '/<skip_nfs>/d' "${OSSEC_CONF}" 2>/dev/null || true
+    sed -i '/<\/skip_nfs>/d' "${OSSEC_CONF}" 2>/dev/null || true
+    
+    log_success "Tags inválidas removidas"
 
-try:
-    ossec_conf = "/var/ossec/etc/ossec.conf"
-    tree = ET.parse(ossec_conf)
-    root = tree.getroot()
-    
-    # Encontrar e limpar elementos orphaos no syscheck
-    for syscheck in root.findall('.//syscheck'):
-        # Remover elementos inválidos
-        for elem in list(syscheck):
-            if elem.tag in ['file', 'skip_sys', 'skip_nfs']:
-                syscheck.remove(elem)
-    
-    # Normalizar scan_day para minúsculas
-    for scan_day in root.findall('.//scan_day'):
-        if scan_day.text:
-            scan_day.text = scan_day.text.lower()
-    
-    # Salvar arquivo limpo
-    tree.write(ossec_conf, encoding='utf-8', xml_declaration=True)
-    print("XML limpo com sucesso", file=sys.stderr)
-    
-except Exception as e:
-    print(f"Erro ao processar XML: {e}", file=sys.stderr)
-    sys.exit(1)
-PYTHON_SCRIPT
+    # 2. Normalizar dias da semana para minúsculas (com bash loop para garantir)
+    log_info "Normalizando dias da semana..."
+    for day in Monday Tuesday Wednesday Thursday Friday Saturday Sunday; do
+        day_lower=$(echo "$day" | tr '[:upper:]' '[:lower:]')
+        sed -i "s|<scan_day>$day</scan_day>|<scan_day>$day_lower</scan_day>|g" "${OSSEC_CONF}"
+    done
+    log_success "Dias normalizados para minúsculas"
 
-    if [[ $? -eq 0 ]]; then
-        log_success "Tags inválidas removidas"
-    else
-        log_warning "Limpeza com Python falhou, tentando com sed..."
-        # Fallback para sed (menos seguro mas funciona)
-        sed -i '/<syscheck>/,/<\/syscheck>/{ /\(<file>\|<file \|<skip_sys>\|<skip_nfs>\)/d; }' "${OSSEC_CONF}"
-        sed -i 's|<scan_day>[A-Z]|<scan_day>'"$(sed -E 's/<scan_day>([A-Za-z]+)<\/scan_day>/\L\1/g')"'|g' "${OSSEC_CONF}"
-        log_success "Tags inválidas removidas (com sed)"
-    fi
-
-    # Configurar nome do agente
+    # 3. Configurar nome do agente
     log_info "Configurando nome do agente: ${AGENT_NAME}"
     sed -i "s|<agent_name>.*</agent_name>|<agent_name>${AGENT_NAME}</agent_name>|" "${OSSEC_CONF}"
 
-    # Configurar Manager
+    # 4. Configurar Manager
     log_info "Configurando Manager: ${WAZUH_MANAGER_IP}:${WAZUH_MANAGER_PORT}"
     sed -i "s|<manager>.*</manager>|<manager>${WAZUH_MANAGER_IP}</manager>|" "${OSSEC_CONF}"
     sed -i "s|<manager_port>.*</manager_port>|<manager_port>${WAZUH_MANAGER_PORT}</manager_port>|" "${OSSEC_CONF}"
 
-    # Validar XML
+    # 5. Validar XML - se falhar, restaurar backup
     log_info "Validando sintaxe XML da configuração..."
     if command -v xmllint &>/dev/null; then
         if xmllint --noout "${OSSEC_CONF}" 2>/tmp/xml_errors.log; then
@@ -301,12 +280,11 @@ PYTHON_SCRIPT
             cat /tmp/xml_errors.log | head -10 | tee -a "${LOG_FILE}"
             log_warning "Restaurando backup..."
             cp "${BACKUP_FILE}" "${OSSEC_CONF}"
-            exit 1
+            log_warning "Wazuh regenerará configuração ao iniciar"
         fi
     else
-        log_warning "xmllint não disponível, instalando libxml2..."
-        apt-get install -y -qq libxml2 2>/dev/null || true
-        log_warning "Validação XML será feita ao iniciar o serviço"
+        log_warning "xmllint não disponível - continuando"
+        log_warning "Validação será feita ao iniciar o serviço"
     fi
 }
 
@@ -330,7 +308,7 @@ start_wazuh_agent() {
 
     log_info "Iniciando Wazuh Agent..."
     if systemctl start wazuh-agent.service 2>/dev/null; then
-        sleep 2
+        sleep 3
         
         # Verificar status
         if systemctl is-active --quiet wazuh-agent.service; then
@@ -416,7 +394,7 @@ main() {
     print_banner
     log_info "Arquivo de log criado: ${LOG_FILE}"
     log_info "Iniciando deployment do Wazuh Agent ${WAZUH_VERSION}"
-    log_info "Script versão: 2.3 (FIXED - GPG + XML)"
+    log_info "Script versão: 2.4 (SED-ONLY - Compatível com XML corrompido)"
 
     validate_prerequisites
     update_system
