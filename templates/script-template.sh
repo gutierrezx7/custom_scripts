@@ -142,11 +142,6 @@ main() {
 # Processamento de argumentos
 #############################################################
 
-# Se nenhum argumento, mostrar ajuda
-if [[ $# -eq 0 ]]; then
-    show_help
-fi
-
 # Processar argumentos
 while [[ $# -gt 0 ]]; do
     case $1 in
