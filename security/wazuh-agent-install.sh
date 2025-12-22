@@ -1,4 +1,21 @@
+#!/bin/bash
 
+################################################################################
+#                                                                              #
+#        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE (CORRIGIDO v2.3)          #
+#        Deployment com Validações e Tratamento de Erros                     #
+#                                                                              #
+################################################################################
+
+set -euo pipefail
+
+# ============================================================================
+# CONFIGURAÇÕES
+# ============================================================================
+WAZUH_VERSION="4.14.1"
+WAZUH_MANAGER_IP="${WAZUH_MANAGER_IP:-soc.expertlevel.lan}"
+WAZUH_MANAGER_PORT="${WAZUH_MANAGER_PORT:-1514}"
+AGENT_NAME="${AGENT_NAME:-$(hostname)}"
 LOG_FILE="/var/log/wazuh-install.log"
 BACKUP_DIR="/var/backups/wazuh"
 
@@ -33,7 +50,7 @@ print_banner() {
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE                           ║
-║        Deployment com Validações e Tratamento de Erros (v2.2 FIXED)        ║
+║        Deployment com Validações e Tratamento de Erros (v2.3 FIXED)        ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 EOF
@@ -128,7 +145,7 @@ validate_prerequisites() {
 update_system() {
     log_info "=== FASE 2: ATUALIZANDO SISTEMA ==="
     log_info "Executando apt-get update..."
-    apt-get update -qq || log_warning "apt-get update retornou aviso"
+    apt-get update -qq 2>&1 | grep -v "^W:" || true
     log_success "Sistema atualizado"
 
     log_info "Instalando dependências: gnupg, apt-transport-https, curl, lsb-release..."
@@ -149,9 +166,25 @@ update_system() {
 configure_wazuh_repo() {
     log_info "=== FASE 3: CONFIGURANDO REPOSITÓRIO WAZUH ==="
 
+    # Limpar chaves GPG antigas/corrompidas
+    log_info "Limpando chaves GPG antigas..."
+    rm -f /usr/share/keyrings/wazuh.gpg /etc/apt/trusted.gpg.d/wazuh.gpg 2>/dev/null || true
+
     log_info "Importando chave GPG Wazuh..."
-    curl -sSL https://packages.wazuh.com/key/GPG-KEY-WAZUH 2>/dev/null | \
-        gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import - 2>/dev/null || true
+    # Download e conversion segura
+    if ! curl -sSL https://packages.wazuh.com/key/GPG-KEY-WAZUH 2>/dev/null | \
+         gpg --dearmor 2>/dev/null | \
+         tee /usr/share/keyrings/wazuh.gpg >/dev/null 2>&1; then
+        log_error "Falha ao importar chave GPG"
+        exit 1
+    fi
+
+    # Verificar se o arquivo foi criado corretamente
+    if [[ ! -s /usr/share/keyrings/wazuh.gpg ]]; then
+        log_error "Arquivo GPG vazio ou não foi criado"
+        exit 1
+    fi
+
     chmod 644 /usr/share/keyrings/wazuh.gpg
     log_success "Chave GPG importada com sucesso"
 
@@ -161,7 +194,7 @@ configure_wazuh_repo() {
     log_success "Repositório Wazuh adicionado"
 
     log_info "Atualizando índices de pacotes..."
-    apt-get update -qq || true
+    apt-get update -qq 2>&1 | grep -v "^W:" || true
     log_success "Índices atualizados"
 }
 
@@ -205,26 +238,49 @@ configure_wazuh_agent() {
     log_info "Fazendo backup da configuração original..."
     log_success "Backup criado: ${BACKUP_FILE}"
 
-    # Limpeza - remover tags inválidas
+    # Limpeza - remover tags inválidas COM MAIS CUIDADO
     log_info "Limpando configuração de tags inválidas..."
     
-    # Remove elementos órfãos de syscheck
-    sed -i '/<syscheck>/,/<\/syscheck>/{
-        /<file[^_]/d
-        /<skip_sys>/d
-        /<\/skip_sys>/d
-    }' "${OSSEC_CONF}"
+    # Usar Python para manipulação XML mais confiável
+    python3 << 'PYTHON_SCRIPT'
+import xml.etree.ElementTree as ET
+import sys
 
-    # Remove scan_day em formato inválido (case-sensitive)
-    sed -i 's|<scan_day>[Mm]onday</scan_day>|<scan_day>monday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Tt]uesday</scan_day>|<scan_day>tuesday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Ww]ednesday</scan_day>|<scan_day>wednesday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Tt]hursday</scan_day>|<scan_day>thursday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Ff]riday</scan_day>|<scan_day>friday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Ss]aturday</scan_day>|<scan_day>saturday</scan_day>|g' "${OSSEC_CONF}"
-    sed -i 's|<scan_day>[Ss]unday</scan_day>|<scan_day>sunday</scan_day>|g' "${OSSEC_CONF}"
+try:
+    ossec_conf = "/var/ossec/etc/ossec.conf"
+    tree = ET.parse(ossec_conf)
+    root = tree.getroot()
+    
+    # Encontrar e limpar elementos orphaos no syscheck
+    for syscheck in root.findall('.//syscheck'):
+        # Remover elementos inválidos
+        for elem in list(syscheck):
+            if elem.tag in ['file', 'skip_sys', 'skip_nfs']:
+                syscheck.remove(elem)
+    
+    # Normalizar scan_day para minúsculas
+    for scan_day in root.findall('.//scan_day'):
+        if scan_day.text:
+            scan_day.text = scan_day.text.lower()
+    
+    # Salvar arquivo limpo
+    tree.write(ossec_conf, encoding='utf-8', xml_declaration=True)
+    print("XML limpo com sucesso", file=sys.stderr)
+    
+except Exception as e:
+    print(f"Erro ao processar XML: {e}", file=sys.stderr)
+    sys.exit(1)
+PYTHON_SCRIPT
 
-    log_success "Tags inválidas removidas"
+    if [[ $? -eq 0 ]]; then
+        log_success "Tags inválidas removidas"
+    else
+        log_warning "Limpeza com Python falhou, tentando com sed..."
+        # Fallback para sed (menos seguro mas funciona)
+        sed -i '/<syscheck>/,/<\/syscheck>/{ /\(<file>\|<file \|<skip_sys>\|<skip_nfs>\)/d; }' "${OSSEC_CONF}"
+        sed -i 's|<scan_day>[A-Z]|<scan_day>'"$(sed -E 's/<scan_day>([A-Za-z]+)<\/scan_day>/\L\1/g')"'|g' "${OSSEC_CONF}"
+        log_success "Tags inválidas removidas (com sed)"
+    fi
 
     # Configurar nome do agente
     log_info "Configurando nome do agente: ${AGENT_NAME}"
@@ -238,10 +294,11 @@ configure_wazuh_agent() {
     # Validar XML
     log_info "Validando sintaxe XML da configuração..."
     if command -v xmllint &>/dev/null; then
-        if xmllint --noout "${OSSEC_CONF}" 2>/dev/null; then
+        if xmllint --noout "${OSSEC_CONF}" 2>/tmp/xml_errors.log; then
             log_success "Validação XML concluída com sucesso"
         else
-            log_error "XML contém erros de sintaxe"
+            log_error "XML contém erros de sintaxe:"
+            cat /tmp/xml_errors.log | head -10 | tee -a "${LOG_FILE}"
             log_warning "Restaurando backup..."
             cp "${BACKUP_FILE}" "${OSSEC_CONF}"
             exit 1
@@ -273,12 +330,11 @@ start_wazuh_agent() {
 
     log_info "Iniciando Wazuh Agent..."
     if systemctl start wazuh-agent.service 2>/dev/null; then
-        log_success "Wazuh Agent iniciado com sucesso"
         sleep 2
         
         # Verificar status
         if systemctl is-active --quiet wazuh-agent.service; then
-            log_success "Status do serviço: ATIVO"
+            log_success "Wazuh Agent iniciado com sucesso"
             show_agent_status
         else
             log_error "Serviço iniciado mas retornou erro - capturando diagnóstico..."
@@ -318,7 +374,7 @@ show_agent_diagnostics() {
     echo ""
     log_info "Validando arquivo de configuração:"
     if command -v xmllint &>/dev/null; then
-        xmllint --noout /var/ossec/etc/ossec.conf 2>&1 || true
+        xmllint --noout /var/ossec/etc/ossec.conf 2>&1 | head -20 || true
     fi
     
     echo ""
@@ -360,7 +416,7 @@ main() {
     print_banner
     log_info "Arquivo de log criado: ${LOG_FILE}"
     log_info "Iniciando deployment do Wazuh Agent ${WAZUH_VERSION}"
-    log_info "Script versão: 2.2 (FIXED)"
+    log_info "Script versão: 2.3 (FIXED - GPG + XML)"
 
     validate_prerequisites
     update_system
