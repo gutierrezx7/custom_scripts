@@ -2,9 +2,9 @@
 
 ################################################################################
 #                                                                              #
-#        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE (v2.4 SED-ONLY)           #
+#        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE (v2.5 JUNK-FIX)           #
 #        Deployment com Validações e Tratamento de Erros                     #
-#        Compatível com XML corrompido - Usa SED puro                        #
+#        Remove junk XML após </ossec_config> + SED puro                      #
 #                                                                              #
 ################################################################################
 
@@ -51,7 +51,7 @@ print_banner() {
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║        WAZUH AGENT 4.14.1 - AUTOMAÇÃO PROXMOX VE                           ║
-║        Deployment com Validações e Tratamento de Erros (v2.4 SED-ONLY)     ║
+║        Deployment com Validações e Tratamento de Erros (v2.5 JUNK-FIX)     ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 EOF
@@ -225,7 +225,7 @@ install_wazuh_agent() {
 }
 
 # ============================================================================
-# FASE 5: CONFIGURAÇÃO DO WAZUH AGENT (SED PURO - COMPATÍVEL COM XML CORROMPIDO)
+# FASE 5: CONFIGURAÇÃO DO WAZUH AGENT (SED PURO + JUNK REMOVAL)
 # ============================================================================
 
 configure_wazuh_agent() {
@@ -240,20 +240,26 @@ configure_wazuh_agent() {
     log_success "Backup criado: ${BACKUP_FILE}"
 
     # =========================================================================
-    # LIMPEZA COM SED PURO - Compatível com XML corrompido
+    # LIMPEZA AGRESSIVA - Remove junk XML e tags inválidas
     # =========================================================================
-    log_info "Limpando configuração de tags inválidas..."
+    log_info "Limpando configuração (removendo junk XML e tags inválidas)..."
     
-    # 1. Remover elementos orphaos linha por linha
+    # CRÍTICO: Remover TODO conteúdo após </ossec_config>
+    # Isso resolve o erro "Extra content at the end of the document"
+    sed -i '/<\/ossec_config>/q' "${OSSEC_CONF}"
+    log_info "  ✓ Removido conteúdo após </ossec_config>"
+    
+    # Remover elementos orphaos linha por linha
     sed -i '/<file[^_]/d' "${OSSEC_CONF}" 2>/dev/null || true
     sed -i '/<skip_sys>/d' "${OSSEC_CONF}" 2>/dev/null || true
     sed -i '/<\/skip_sys>/d' "${OSSEC_CONF}" 2>/dev/null || true
     sed -i '/<skip_nfs>/d' "${OSSEC_CONF}" 2>/dev/null || true
     sed -i '/<\/skip_nfs>/d' "${OSSEC_CONF}" 2>/dev/null || true
+    log_info "  ✓ Removidas tags inválidas (<file>, <skip_sys>, <skip_nfs>)"
     
-    log_success "Tags inválidas removidas"
+    log_success "Configuração limpa com sucesso"
 
-    # 2. Normalizar dias da semana para minúsculas (com bash loop para garantir)
+    # Normalizar dias da semana para minúsculas
     log_info "Normalizando dias da semana..."
     for day in Monday Tuesday Wednesday Thursday Friday Saturday Sunday; do
         day_lower=$(echo "$day" | tr '[:upper:]' '[:lower:]')
@@ -261,16 +267,16 @@ configure_wazuh_agent() {
     done
     log_success "Dias normalizados para minúsculas"
 
-    # 3. Configurar nome do agente
+    # Configurar nome do agente
     log_info "Configurando nome do agente: ${AGENT_NAME}"
     sed -i "s|<agent_name>.*</agent_name>|<agent_name>${AGENT_NAME}</agent_name>|" "${OSSEC_CONF}"
 
-    # 4. Configurar Manager
+    # Configurar Manager
     log_info "Configurando Manager: ${WAZUH_MANAGER_IP}:${WAZUH_MANAGER_PORT}"
     sed -i "s|<manager>.*</manager>|<manager>${WAZUH_MANAGER_IP}</manager>|" "${OSSEC_CONF}"
     sed -i "s|<manager_port>.*</manager_port>|<manager_port>${WAZUH_MANAGER_PORT}</manager_port>|" "${OSSEC_CONF}"
 
-    # 5. Validar XML - se falhar, restaurar backup
+    # Validar XML - se falhar, restaurar backup
     log_info "Validando sintaxe XML da configuração..."
     if command -v xmllint &>/dev/null; then
         if xmllint --noout "${OSSEC_CONF}" 2>/tmp/xml_errors.log; then
@@ -278,9 +284,21 @@ configure_wazuh_agent() {
         else
             log_error "XML contém erros de sintaxe:"
             cat /tmp/xml_errors.log | head -10 | tee -a "${LOG_FILE}"
-            log_warning "Restaurando backup..."
+            log_warning "Restaurando backup e tentando novamente..."
             cp "${BACKUP_FILE}" "${OSSEC_CONF}"
-            log_warning "Wazuh regenerará configuração ao iniciar"
+            
+            # Segunda tentativa: limpeza mais agressiva
+            log_info "Aplicando limpeza AGRESSIVA (segunda tentativa)..."
+            sed -i '/<\/ossec_config>/q' "${OSSEC_CONF}"
+            sed -i '/<file/d' "${OSSEC_CONF}"
+            sed -i '/<skip_sys/d' "${OSSEC_CONF}"
+            sed -i "s|<scan_day>[A-Z].*</scan_day>|<scan_day>monday</scan_day>|gi" "${OSSEC_CONF}"
+            
+            if xmllint --noout "${OSSEC_CONF}" 2>/dev/null; then
+                log_success "XML validado após limpeza agressiva"
+            else
+                log_error "XML ainda contém erros - Wazuh tentará regenerar ao iniciar"
+            fi
         fi
     else
         log_warning "xmllint não disponível - continuando"
@@ -394,7 +412,7 @@ main() {
     print_banner
     log_info "Arquivo de log criado: ${LOG_FILE}"
     log_info "Iniciando deployment do Wazuh Agent ${WAZUH_VERSION}"
-    log_info "Script versão: 2.4 (SED-ONLY - Compatível com XML corrompido)"
+    log_info "Script versão: 2.5 (JUNK-FIX - Remove conteúdo após </ossec_config>)"
 
     validate_prerequisites
     update_system
