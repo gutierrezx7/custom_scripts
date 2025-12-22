@@ -153,7 +153,7 @@ function install_ubuntu()
 			if [[ $(systemctl start mongod | grep -i -c "Failed") -gt 0 ]]; then
 				systemctl daemon-reload >> DFM_installer.log
 				if [[ $(systemctl start mongod | grep -i -c "Failed") -gt 0 ]]; then
-					echo -e "Installer has encountered an issue starting  ${RED}MongoDB${NC}. Please check DFM_installer.log"
+					echo -e "Installer has encountered an issue starting ${RED}MongoDB${NC}. Please check DFM_installer.log"
 					tail -n 50 /var/log/mongodb/mongod.log >> DFM_installer.log
 					exit
 				fi
@@ -277,8 +277,8 @@ function uninstall_ubuntu()
 			service mongod stop >> DFM_installer.log
 		fi
 		apt-get -y purge --allow-change-held-packages mongodb-org* >> DFM_installer.log
-		rm -rf /var/log/mongodb >> DFM_installer.log
-		rm -rf /var/lib/mongodb >> DFM_installer.log
+		rm -rf /var/log/mongodb >> DFM_installer.log 2>&1 || true
+		rm -rf /var/lib/mongodb >> DFM_installer.log 2>&1 || true
 		echo "Done"
 	fi
 }
@@ -469,8 +469,8 @@ function uninstall_debian()
 			service mongod stop >> DFM_installer.log
 		fi
 		apt-get -y purge --allow-change-held-packages mongodb-org* >> DFM_installer.log
-		rm -rf /var/log/mongodb >> DFM_installer.log
-		rm -rf /var/lib/mongodb >> DFM_installer.log
+		rm -rf /var/log/mongodb >> DFM_installer.log 2>&1 || true
+		rm -rf /var/lib/mongodb >> DFM_installer.log 2>&1 || true
 		echo "Done"
 	fi
 }
