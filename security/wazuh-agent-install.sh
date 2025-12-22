@@ -3,8 +3,8 @@
 ################################################################################
 #                                                                              #
 #        WAZUH AGENT 4.14.1 - PROXMOX VE 9.1 DEPLOYMENT                      #
-#        Version: 3.1 - XML Structure Fix + Proper Nesting                    #
-#        Resolve: "Extra content at the end of the document" error            #
+#        Version: 4.0 - FINAL FIX: Merge syscheck + Proper XML nesting       #
+#        ERROR: "Invalid element 'syscheck'" = Duplicate syscheck resolved    #
 #                                                                              #
 ################################################################################
 
@@ -57,7 +57,7 @@ print_banner() {
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║        WAZUH AGENT 4.14.1 - PROXMOX VE 9.1 DEPLOYMENT                       ║
-║        Version 3.1 - Complete XML Structure Fix                             ║
+║        Version 4.0 - FINAL FIX: Merged syscheck configuration               ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -240,11 +240,11 @@ restore_default_config() {
     log_info "=== FASE 5: RESTAURANDO CONFIGURAÇÃO PADRÃO ==="
 
     local OSSEC_CONF="/var/ossec/etc/ossec.conf"
-    local BACKUP_DIR="/var/backups/wazuh"
-    local BACKUP_FILE="${BACKUP_DIR}/ossec.conf.$(date +%s).bak"
+    local BACKUP_DIR_LOCAL="/var/backups/wazuh"
+    local BACKUP_FILE="${BACKUP_DIR_LOCAL}/ossec.conf.$(date +%s).bak"
 
     # Criar backup
-    mkdir -p "${BACKUP_DIR}"
+    mkdir -p "${BACKUP_DIR_LOCAL}"
     cp "${OSSEC_CONF}" "${BACKUP_FILE}"
     log_info "Backup criado: ${BACKUP_FILE}"
 
@@ -285,6 +285,7 @@ restore_default_config() {
     <scan_on_start>yes</scan_on_start>
     <disabled>no</disabled>
 
+    <!-- Standard directories -->
     <directories check_all="yes">/etc</directories>
     <directories check_all="yes">/usr/bin</directories>
     <directories check_all="yes">/usr/sbin</directories>
@@ -364,7 +365,7 @@ configure_agent_basic() {
 }
 
 # ============================================================================
-# FASE 7: ADICIONAR MONITORAMENTO PROXMOX
+# FASE 7: ADICIONAR MONITORAMENTO PROXMOX (MERGE com syscheck existente)
 # ============================================================================
 
 add_proxmox_monitoring() {
@@ -375,25 +376,24 @@ add_proxmox_monitoring() {
     # Backup antes de modificar
     cp "${OSSEC_CONF}" "${OSSEC_CONF}.pre-proxmox"
     
-    # CRÍTICO: Inserir ANTES de </ossec_config>
-    log_info "Inserindo regras Proxmox-específicas..."
+    log_info "Inserindo regras Proxmox-específicas (MERGE com syscheck existente)..."
 
-    # Usar awk para inserir antes da tag de fechamento
-    awk '/<\/ossec_config>/{
-        print "  <!-- Proxmox VE Configuration Monitoring -->";
-        print "  <syscheck>";
-        print "    <frequency>3600</frequency>";
-        print "    <scan_on_start>yes</scan_on_start>";
-        print "    ";
-        print "    <!-- Monitor Proxmox core directories -->";
+    # CRÍTICO: Inserir DENTRO da seção syscheck existente, NÃO criar uma nova
+    # Usar awk para inserir antes de </syscheck>
+    awk '/<\/syscheck>/{
+        print "    <!-- Proxmox VE Monitoring -->";
         print "    <directories check_all=\"yes\" report_changes=\"yes\" realtime=\"yes\">/etc/pve</directories>";
         print "    <directories check_all=\"yes\" report_changes=\"yes\">/etc/pve/qemu-server</directories>";
         print "    <directories check_all=\"yes\" report_changes=\"yes\">/etc/pve/lxc</directories>";
         print "    <directories check_all=\"yes\" report_changes=\"yes\">/etc/pve/nodes</directories>";
         print "    <directories check_all=\"yes\" report_changes=\"yes\">/etc/pve/firewall</directories>";
         print "    <directories check_all=\"yes\" report_changes=\"yes\">/etc/pve/storage</directories>";
-        print "  </syscheck>";
-        print "  ";
+    } 1' "${OSSEC_CONF}" > "${OSSEC_CONF}.tmp" && mv "${OSSEC_CONF}.tmp" "${OSSEC_CONF}"
+
+    log_debug "Proxmox directories adicionadas ao syscheck existente"
+
+    # Agora adicionar localfile entries ANTES de </ossec_config>
+    awk '/<\/ossec_config>/{
         print "  <!-- Proxmox Log Monitoring -->";
         print "  <localfile>";
         print "    <log_format>syslog</log_format>";
@@ -415,10 +415,10 @@ add_proxmox_monitoring() {
         print "    <location>/var/log/pvecm.log</location>";
         print "  </localfile>";
         print "  ";
-        print "";
     } 1' "${OSSEC_CONF}" > "${OSSEC_CONF}.tmp" && mv "${OSSEC_CONF}.tmp" "${OSSEC_CONF}"
 
-    log_success "Monitoramento Proxmox adicionado"
+    log_debug "Proxmox log files adicionadas"
+    log_success "Monitoramento Proxmox adicionado com sucesso"
     echo ""
 }
 
@@ -448,7 +448,8 @@ validate_xml() {
             log_error "Restaurando backup..."
             if [[ -f "${OSSEC_CONF}.pre-proxmox" ]]; then
                 cp "${OSSEC_CONF}.pre-proxmox" "${OSSEC_CONF}"
-                log_warning "Configuração restaurada. Tente novamente."
+                log_warning "Configuração restaurada. Verifique o arquivo e tente novamente."
+                cat "${OSSEC_CONF}" | grep -n "syscheck\|localfile\|rootcheck" || true
             fi
             exit 1
         fi
@@ -518,6 +519,11 @@ show_diagnostics() {
     if command -v xmllint &>/dev/null; then
         xmllint --noout /var/ossec/etc/ossec.conf 2>&1 | head -20 || true
     fi
+    
+    echo ""
+    log_info "Contagem de tags syscheck:"
+    grep -c "<syscheck>" /var/ossec/etc/ossec.conf || true
+    grep -c "</syscheck>" /var/ossec/etc/ossec.conf || true
     
     echo ""
 }
