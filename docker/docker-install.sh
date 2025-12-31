@@ -43,17 +43,32 @@ echo -e "${YELLOW}Atualizando sistema...${NC}"
 apt-get update
 
 echo -e "${YELLOW}Instalando pré-requisitos...${NC}"
-apt-get install -y ca-certificates curl gnupg
+apt-get install -y ca-certificates curl gnupg lsb-release
 
 echo -e "${YELLOW}Adicionando chave GPG oficial do Docker...${NC}"
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/$(lsb_release -si | tr '[:upper:]' '[:lower:]')/gpg | gpg --dearmor -yes -o /etc/apt/keyrings/docker.gpg
+rm -f /etc/apt/keyrings/docker.gpg # Remove old key if exists
+
+DISTRO=$(lsb_release -si | tr '[:upper:]' '[:lower:]')
+# Normalização básica
+if [[ "$DISTRO" == "linuxmint" ]] || [[ "$DISTRO" == "neon" ]] || [[ "$DISTRO" == "pop" ]]; then
+    DISTRO="ubuntu"
+fi
+
+# Download da chave com verificação de erro
+if ! curl -fsSL "https://download.docker.com/linux/$DISTRO/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; then
+    msg_error "Falha ao baixar a chave GPG do Docker."
+    exit 1
+fi
 chmod a+r /etc/apt/keyrings/docker.gpg
 
 echo -e "${YELLOW}Adicionando repositório do Docker...${NC}"
+# Detectar codename
+CODENAME=$(lsb_release -cs)
+
 echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(lsb_release -si | tr '[:upper:]' '[:lower:]') \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$DISTRO \
+  $CODENAME stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 echo -e "${YELLOW}Instalando Docker Engine...${NC}"
@@ -61,9 +76,7 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 echo -e "${YELLOW}Verificando instalação...${NC}"
-docker --version
-
-if [ $? -eq 0 ]; then
+if docker --version; then
     msg_info "Docker instalado com sucesso!"
     
     # Configurações Específicas

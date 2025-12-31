@@ -118,14 +118,16 @@ function install_ubuntu()
 		fi
 
 		echo -e -n "Retrieving MongoDB's $mongoVersion key... "
-    if [[ $(wget -qO - "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg -o /usr/share/keyrings/mongodb-server-$mongoVersion.gpg --dearmor | wc -l) -ne 0 ]]; then
-    	apt-get install gnupg >> DFM_installer.log
-    	if [[ $(wget -qO - "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg -o /usr/share/keyrings/mongodb-server-$mongoVersion.gpg --dearmor | wc -l) -ne 0 ]]; then
-    		echo -e "Unable to retrieve MongoDB's key. Please check ${RED}DFM_installer.log${NC}"
-    		exit
-    	fi
-    fi
-    echo "Done"
+		rm -f "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"
+		if ! curl -fsSL "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg --dearmor -o "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"; then
+			apt-get install -y gnupg >> DFM_installer.log
+			if ! curl -fsSL "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg --dearmor -o "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"; then
+				echo -e "Unable to retrieve MongoDB's key. Please check ${RED}DFM_installer.log${NC}"
+				exit 1
+			fi
+		fi
+		chmod a+r "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"
+		echo "Done"
 
 		# MongoDB - install
 		if [[ $(lsb_release -r | grep -c -E "16.[0-9]{2}") -gt 0 ]]; then
@@ -189,10 +191,12 @@ function install_ubuntu()
 
 	# DynFi Manager - Install
 	echo -e -n "Retrieving ${BLUE}DynFi Manager's${NC} key... "
-	if [[ $(wget -qO - https://archive.dynfi.com/dynfi.gpg | gpg -o /usr/share/keyrings/dynfi.gpg --dearmor | wc -l) -ne 0 ]]; then
+	rm -f /usr/share/keyrings/dynfi.gpg
+	if ! curl -fsSL https://archive.dynfi.com/dynfi.gpg | gpg --dearmor -o /usr/share/keyrings/dynfi.gpg; then
 		echo -e "Unable to retrieve ${RED}DynFi's${NC} key. Please check DFM_installer.log"
-		exit
+		exit 1
 	fi
+	chmod a+r /usr/share/keyrings/dynfi.gpg
 	echo "Done"
 
 	if [[ $(lsb_release -r | grep -c -E "16.[0-9]{2}") -gt 0 ]]; then
@@ -326,24 +330,26 @@ function install_debian()
 
 		# MongoDB - key
 		echo -n "Retrieving MongoDB's $mongoVersion key... "
-		if [[ $(wget -qO - "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg -o /usr/share/keyrings/mongodb-server-$mongoVersion.gpg --dearmor | wc -l) -ne 0 ]]; then
-			apt-get install gnupg >> DFM_installer.log
-			if [[ $(wget -qO - "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg -o /usr/share/keyrings/mongodb-server-$mongoVersion.gpg --dearmor | wc -l) -ne 0 ]]; then
+		rm -f "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"
+		if ! curl -fsSL "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg --dearmor -o "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"; then
+			apt-get install -y gnupg >> DFM_installer.log
+			if ! curl -fsSL "https://pgp.mongodb.com/server-$mongoVersion.asc" | gpg --dearmor -o "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"; then
 				echo -e "Unable to retrieve ${RED}MongoDB's key${NC}. Please check DFM_installer.log"
-				exit
+				exit 1
 			fi
 		fi
+		chmod a+r "/usr/share/keyrings/mongodb-server-$mongoVersion.gpg"
 		echo "Done"
 
 		# MongoDB - install
 		if [[ $(echo "$distro" | grep -c "stretch") -gt 0 ]]; then
-			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] http://repo.mongodb.org/apt/debian stretch/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list >> DFM_installer.log
+			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] https://repo.mongodb.org/apt/debian stretch/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list >> DFM_installer.log
 		elif [[ $(echo "$distro" | grep -c "buster") -gt 0 ]]; then
-			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] http://repo.mongodb.org/apt/debian buster/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list  >> DFM_installer.log
+			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] https://repo.mongodb.org/apt/debian buster/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list  >> DFM_installer.log
 		elif [[ $(echo "$distro" | grep -c "bullseye") -gt 0 ]]; then
-			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] http://repo.mongodb.org/apt/debian bullseye/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list >> DFM_installer.log
+			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] https://repo.mongodb.org/apt/debian bullseye/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list >> DFM_installer.log
 		else
-			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list  >> DFM_installer.log
+			echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-$mongoVersion.gpg ] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/$mongoVersion main" | tee /etc/apt/sources.list.d/mongodb-org-$mongoVersion.list  >> DFM_installer.log
 		fi
 
 		echo -n "Fetching MongoDB's repo... "
@@ -396,18 +402,20 @@ function install_debian()
 
 	# DynFi Manager - Install
 	echo -n "Retrieving ${BLUE}DynFi Manager's${NC} key... "
-	if [[ $(wget -qO - https://archive.dynfi.com/dynfi.gpg | gpg -o /usr/share/keyrings/dynfi.gpg --dearmor | wc -l) -ne 0 ]]; then
+	rm -f /usr/share/keyrings/dynfi.gpg
+	if ! curl -fsSL https://archive.dynfi.com/dynfi.gpg | gpg --dearmor -o /usr/share/keyrings/dynfi.gpg; then
 		echo -e "Unable to retrieve ${RED}DynFi Manager's key${NC}. Please check DFM_installer.log"
-		exit
+		exit 1
 	fi
+	chmod a+r /usr/share/keyrings/dynfi.gpg
 	echo "Done"
 
 	if [[ $(echo "$distro" | grep -c "stretch") -gt 0 ]]; then
-		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] http://archive.dynfi.com/debian stretch main" > /etc/apt/sources.list.d/dynfi.list
+		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] https://archive.dynfi.com/debian stretch main" > /etc/apt/sources.list.d/dynfi.list
 	elif [[ $(echo "$distro" | grep -c "buster") -gt 0 ]]; then
 		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] https://archive.dynfi.com/debian buster main" > /etc/apt/sources.list.d/dynfi.list
 	elif [[ $(echo "$distro" | grep -c "bullseye") -gt 0 ]]; then
-		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] http://archive.dynfi.com/debian bullseye main" > /etc/apt/sources.list.d/dynfi.list
+		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] https://archive.dynfi.com/debian bullseye main" > /etc/apt/sources.list.d/dynfi.list
 	else
 		echo "deb [ signed-by=/usr/share/keyrings/dynfi.gpg ] https://archive.dynfi.com/debian bookworm main" > /etc/apt/sources.list.d/dynfi.list
 	fi
