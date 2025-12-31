@@ -8,6 +8,7 @@
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="/opt/custom_scripts"
 SCRIPT_NAME="setup.sh"
+SUMMARY_LOG="/var/log/custom_scripts_summary.log"
 
 # Cores
 RED='\033[0;31m'
@@ -21,6 +22,8 @@ NC='\033[0m'
 declare -A SCRIPT_MAP
 declare -a ORDERED_SCRIPTS
 NEED_REBOOT=false
+declare -a FAILED_SCRIPTS
+declare -a SUCCESS_SCRIPTS
 
 msg_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 msg_warn() { echo -e "${YELLOW}[AVISO]${NC} $1"; }
@@ -138,6 +141,9 @@ scan_scripts() {
 show_menu_whiptail() {
     CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
     MENU_ITEMS=()
+    FAILED_SCRIPTS=()
+    SUCCESS_SCRIPTS=()
+    NEED_REBOOT=false
     
     # Coletar todos os scripts
     for cat in "${CATEGORIES[@]}"; do
@@ -150,14 +156,20 @@ show_menu_whiptail() {
     for i in "${!MENU_ITEMS[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
         
-        # Adiciona Tags visuais na descrição
+        # Tags visuais
         local TAGS=""
-        [[ "$INTERACTIVE" == "yes" ]] && TAGS+="[Int] "
-        [[ "$REBOOT" == "yes" ]] && TAGS+="[Reboot] "
-        [[ "$NETWORK" == "risk" ]] && TAGS+="[Net] "
+        [[ "$INTERACTIVE" == "yes" ]] && TAGS+=" [Int]"
+        [[ "$REBOOT" == "yes" ]] && TAGS+=" [Reboot]"
+        [[ "$NETWORK" == "risk" ]] && TAGS+=" [NetSafe]" # Ou risco, mas vamos padronizar
+        [[ "$NETWORK" != "safe" ]] && TAGS+=" [NetRisk]"
+
+        # Formatação estilo tabela
+        # printf "%-30s | %-12s | %s" "$TITLE" "$CAT" "$TAGS"
+        # Usando printf para alinhar texto para o whiptail
+        local DISPLAY_STR=$(printf "%-25s  %-12s  %s" "${TITLE:0:25}" "(${CAT})" "${TAGS}")
         
         # ID é o índice no array MENU_ITEMS
-        WHIP_ARGS+=("$i" "$TAGS$TITLE ($CAT)" "OFF")
+        WHIP_ARGS+=("$i" "$DISPLAY_STR" "OFF")
     done
     
     if [ ${#WHIP_ARGS[@]} -eq 0 ]; then
@@ -167,7 +179,7 @@ show_menu_whiptail() {
     
     CHOICES=$(whiptail --title "Custom Scripts Manager ($ENV_TYPE)" \
                        --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar." \
-                       22 78 12 \
+                       22 85 12 \
                        "${WHIP_ARGS[@]}" 3>&1 1>&2 2>&3)
     
     exit_status=$?
@@ -216,6 +228,9 @@ run_queue() {
     echo "Total de scripts selecionados: ${#final_queue[@]}"
     sleep 2
     
+    # Limpar log anterior
+    echo "--- Execução iniciada em $(date) ---" > "$SUMMARY_LOG"
+
     for id in "${final_queue[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
         
@@ -230,11 +245,13 @@ run_queue() {
         
         if [ $ret -eq 0 ]; then
             msg_info "$TITLE concluído com sucesso."
+            SUCCESS_SCRIPTS+=("$TITLE")
             if [[ "$REBOOT" == "yes" ]]; then
                 NEED_REBOOT=true
             fi
         else
             msg_error "$TITLE falhou (Código: $ret). Continuando..."
+            FAILED_SCRIPTS+=("$TITLE (Exit Code: $ret)")
             sleep 3
         fi
         
@@ -244,7 +261,37 @@ run_queue() {
     finalize
 }
 
+generate_summary() {
+    local summary_text="Resumo da Execução:\n\n"
+
+    if [ ${#SUCCESS_SCRIPTS[@]} -gt 0 ]; then
+        summary_text+="SUCESSO:\n"
+        for s in "${SUCCESS_SCRIPTS[@]}"; do
+            summary_text+="  - $s\n"
+        done
+        summary_text+="\n"
+    fi
+
+    if [ ${#FAILED_SCRIPTS[@]} -gt 0 ]; then
+        summary_text+="FALHAS:\n"
+        for f in "${FAILED_SCRIPTS[@]}"; do
+            summary_text+="  - $f\n"
+        done
+        summary_text+="\nVerifique o console para mais detalhes."
+    else
+        summary_text+="Todos os scripts foram executados com sucesso."
+    fi
+
+    # Gravar no log
+    echo -e "$summary_text" >> "$SUMMARY_LOG"
+
+    # Exibir no Whiptail
+    whiptail --title "Relatório de Execução" --msgbox "$summary_text" 20 70
+}
+
 finalize() {
+    generate_summary
+
     msg_header "Execução Finalizada"
     
     if [ "$NEED_REBOOT" = true ]; then
