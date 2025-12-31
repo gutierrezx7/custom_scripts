@@ -1,4 +1,8 @@
 #!/bin/bash
+# Title: Atualizar Sistema
+# Description: Atualização segura do sistema (apt update/upgrade/clean)
+# Supported: VM, LXC
+# Author: Custom Scripts Team
 
 #############################################################
 # Nome do Script: update-system.sh

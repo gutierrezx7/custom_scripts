@@ -1,4 +1,4 @@
-# 🐧 Custom Scripts - Scripts Linux Sortidos
+# 🐧 Custom Scripts - Scripts Linux Sortidos (2025 Edition)
 
 <div align="center">
 
@@ -8,226 +8,87 @@
 
 </div>
 
-Uma coleção de scripts Linux úteis e sortidos para automatizar tarefas comuns, administração de sistemas, manutenção e muito mais. Inspirado no projeto Proxmox Helper Scripts, este repositório visa fornecer scripts bem documentados e fáceis de usar para a comunidade.
+Uma coleção atualizada de scripts Linux para DevOps, SysAdmins e entusiastas de HomeLab. Este repositório foca em ferramentas modernas e essenciais para 2025.
 
-## 📋 Índice
+## 🚀 Instalação Recomendada (Global)
 
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Categorias de Scripts](#-categorias-de-scripts)
-- [Como Usar](#-como-usar)
-- [Instalação Rápida](#-instalação-rápida)
-- [Estrutura do Repositório](#-estrutura-do-repositório)
-- [Contribuindo](#-contribuindo)
-- [Segurança](#-segurança)
-- [Licença](#-licença)
+Para garantir a melhor experiência, use o **Menu Interativo**. Ele detecta automaticamente seu ambiente (VM, LXC, Bare Metal), baixa os módulos necessários e evita erros de compatibilidade.
 
-## 🎯 Sobre o Projeto
-
-Este repositório contém uma coleção curada de scripts shell para Linux que ajudam a:
-
-- ⚡ **Automatizar tarefas repetitivas** - Economize tempo com automação
-- 🔧 **Administrar sistemas** - Ferramentas para gerenciamento de servidores
-- 🛠️ **Manutenção** - Scripts para backup, limpeza e otimização
-- 📊 **Monitoramento** - Ferramentas para monitorar recursos do sistema
-- 🐳 **DevOps** - Scripts para Docker, containers e CI/CD
-- 🌐 **Redes** - Utilitários para configuração e diagnóstico de rede
-
-## 📂 Categorias de Scripts
-
-### 🔧 [System Administration](./system-admin/)
-Scripts para administração e configuração de sistemas Linux.
-- Gerenciamento de usuários e permissões
-- Configuração de serviços
-- Atualizações automáticas do sistema
-- **DynFi Manager Installer** - Script de instalação automatizada do DynFi Manager (suporte para Ubuntu, Debian e macOS)
-
-### 🛠️ [Maintenance](./maintenance/)
-Scripts para manutenção e otimização do sistema.
-- Limpeza de arquivos temporários
-- Gerenciamento de logs
-- Análise de espaço em disco
-
-### 💾 [Backup & Recovery](./backup/)
-Soluções para backup e recuperação de dados.
-- Scripts de backup automático
-- Sincronização de arquivos
-- Snapshots e versionamento
-
-### 📊 [Monitoring](./monitoring/)
-Ferramentas para monitoramento de recursos e serviços.
-- Monitoramento de CPU, RAM e disco
-- Alertas de sistema
-- Relatórios de performance
-
-### 🐳 [Docker & Containers](./docker/)
-Scripts para gerenciamento de containers e Docker.
-- Instalação e configuração do Docker
-- Instalação de aplicações em containers
-- Limpeza de imagens e volumes
-
-### 🌐 [Network](./network/)
-Utilitários para redes e conectividade.
-- Configuração de firewall
-- Diagnóstico de rede
-- VPN e túneis SSH
-
-### 🔒 [Security](./security/)
-Scripts relacionados à segurança do sistema.
-- Hardening de sistema
-- Auditoria de segurança
-- Gerenciamento de certificados SSL
-- **Wazuh Agent Installer** - Script de deployment automatizado do Wazuh Agent 4.14.1 para Proxmox VE
-
-### 🚀 [Automation](./automation/)
-Scripts para automação e deployment.
-- CI/CD helpers
-- Deployment automático
-- Cron jobs e agendamento
-
-## 🚀 Como Usar
-
-### Método 1: Execução Direta (Recomendado)
+**Basta rodar este comando:**
 
 ```bash
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup.sh)"
 ```
 
-ou com curl:
+*O script cuidará de tudo para você.*
 
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
-```
+---
 
-### Método 2: Download e Execução
+## 📂 O que está incluído?
 
-```bash
-# Baixar o script
-wget https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh
+O menu principal (`setup.sh`) dá acesso a todas as ferramentas abaixo, organizadas por categoria:
 
-# Tornar executável
-chmod +x script.sh
+### 🛡️ Segurança
+- **Fail2Ban**: Proteção essencial contra força bruta (SSH).
+- **Firewall (UFW)**: Configuração rápida e segura de portas.
+- **Wazuh Agent**: Monitoramento de segurança avançado.
 
-# Executar
-./script.sh
-```
+### 🌐 Redes
+- **Tailscale**: VPN Mesh zero-config para acesso remoto seguro.
+- **AdGuard Home**: DNS Server com bloqueio de anúncios e rastreadores.
+- **IP Estático (Netplan)**: Utilitário para configurar IP fixo em VMs Ubuntu.
 
-### Método 3: Clone do Repositório
+### 🐳 Docker & DevOps
+- **Docker Engine**: Instalação oficial e atualizada.
+- **Nginx Proxy Manager**: O jeito mais fácil de gerenciar Proxy Reverso e SSL.
+- **Portainer**: Interface gráfica para gerenciar seus containers.
+- **Watchtower**: Mantém seus containers atualizados automaticamente.
 
-```bash
-# Clonar o repositório
-git clone https://github.com/gutierrezx7/custom_scripts.git
+### 🔧 Sistema & Utilitários
+- **Shell Moderno**: Instala Zsh, Oh-My-Zsh e Fastfetch para um terminal produtivo.
+- **System Prep**: Define Hostname, atualiza pacotes e instala ferramentas básicas.
+- **Webmin**: Administração de sistema via web.
+- **DynFi Manager**: Gerenciamento centralizado de firewalls.
 
-# Navegar até a pasta
-cd custom_scripts
+---
 
-# Executar qualquer script
-bash system-admin/exemplo-script.sh
-```
+## ⚡ Exemplos de Uso Direto (Avançado)
 
-## 📦 Instalação Rápida
+Embora recomendemos fortemente o uso do `setup.sh`, você pode executar scripts individuais se souber o que está fazendo.
 
-Para clonar e usar todos os scripts:
-
-```bash
-git clone https://github.com/gutierrezx7/custom_scripts.git ~/custom_scripts
-cd ~/custom_scripts
-chmod +x **/*.sh
-```
+| Script | Descrição | Link Direto (Exemplo) |
+| :--- | :--- | :--- |
+| **Docker** | Instalação do Docker | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/docker-install.sh)"` |
+| **NPM** | Nginx Proxy Manager | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/npm-install.sh)"` |
+| **Tailscale** | Instalar VPN | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/network/tailscale-install.sh)"` |
+| **Zsh** | Shell Moderno | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/modern-shell.sh)"` |
 
 ## 📁 Estrutura do Repositório
 
 ```
 custom_scripts/
-├── system-admin/          # Administração de sistemas
-│   ├── README.md
-│   └── scripts...
-├── maintenance/           # Manutenção do sistema
-│   ├── README.md
-│   └── scripts...
-├── backup/               # Backup e recuperação
-│   ├── README.md
-│   └── scripts...
-├── monitoring/           # Monitoramento
-│   ├── README.md
-│   └── scripts...
-├── docker/               # Docker e containers
-│   ├── README.md
-│   └── scripts...
-├── network/              # Redes
-│   ├── README.md
-│   └── scripts...
-├── security/             # Segurança
-│   ├── README.md
-│   └── scripts...
-├── automation/           # Automação
-│   ├── README.md
-│   └── scripts...
-├── templates/            # Templates de scripts
-├── docs/                 # Documentação adicional
-├── CONTRIBUTING.md       # Guia de contribuição
-└── README.md            # Este arquivo
+├── setup.sh               # 🌟 MENU PRINCIPAL (Execute este!)
+├── system-admin/          # Scripts de sistema (Zsh, Prep, Webmin...)
+├── docker/                # Scripts Docker (NPM, Watchtower, Portainer...)
+├── network/               # Scripts de Rede (Tailscale, AdGuard, IP...)
+├── security/              # Scripts de Segurança (Fail2Ban, UFW...)
+├── monitoring/            # Ferramentas de Monitoramento
+├── maintenance/           # Scripts de Manutenção
+├── backup/                # Scripts de Backup
+└── README.md              # Documentação
 ```
 
 ## 🤝 Contribuindo
 
-Contribuições são muito bem-vindas! Este é um projeto comunitário e sua ajuda é essencial.
+Contribuições são bem-vindas! Se você criar um novo script:
+1. Adicione-o na pasta correta.
+2. Inclua o cabeçalho de metadados padrão (`# Title`, `# Description`, `# Supported`).
+3. O `setup.sh` detectará seu script automaticamente!
 
-### Como Contribuir
+## ⚠️ Segurança e Isenção de Responsabilidade
 
-1. Fork este repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/NovoScript`)
-3. Commit suas mudanças (`git commit -m 'Adiciona novo script de backup'`)
-4. Push para a branch (`git push origin feature/NovoScript`)
-5. Abra um Pull Request
-
-Leia nosso [Guia de Contribuição](CONTRIBUTING.md) para mais detalhes sobre:
-- Padrões de código
-- Como testar scripts
-- Diretrizes de documentação
-- Processo de revisão
-
-## ⚠️ Segurança
-
-### Antes de Executar Qualquer Script:
-
-1. **👀 SEMPRE revise o código** - Nunca execute scripts sem entender o que fazem
-2. **🧪 Teste em ambiente seguro** - Use VMs ou containers para testar primeiro
-3. **💾 Faça backup** - Sempre faça backup antes de executar scripts em produção
-4. **🔒 Verifique permissões** - Execute apenas com as permissões necessárias
-5. **📖 Leia a documentação** - Cada script tem instruções específicas
-
-### Reportar Vulnerabilidades
-
-Se encontrar problemas de segurança, por favor reporte via:
-- GitHub Issues (para problemas não críticos)
-- Email privado para questões sensíveis
+Sempre revise o código antes de executar scripts com privilégios de root. Estes scripts são fornecidos "como estão", sem garantias. Teste em ambiente seguro antes de usar em produção.
 
 ## 📜 Licença
 
-Este projeto está licenciado sob a GNU General Public License v3.0 - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## 🌟 Agradecimentos
-
-- Inspirado pelo excelente trabalho do [Proxmox Helper Scripts](https://github.com/tteck/Proxmox)
-- Agradecimentos a todos os [contribuidores](https://github.com/gutierrezx7/custom_scripts/graphs/contributors)
-- Comunidade open-source por todo o suporte
-
-## 📞 Suporte
-
-- 🐛 [Reportar Bug](https://github.com/gutierrezx7/custom_scripts/issues/new?labels=bug)
-- 💡 [Sugerir Feature](https://github.com/gutierrezx7/custom_scripts/issues/new?labels=enhancement)
-- 💬 [Discussões](https://github.com/gutierrezx7/custom_scripts/discussions)
-
-## 📈 Status do Projeto
-
-Este projeto está em **desenvolvimento ativo**. Novos scripts são adicionados regularmente.
-
----
-
-<div align="center">
-
-**Feito com ❤️ para a comunidade Linux**
-
-⭐ Se este projeto foi útil, considere dar uma estrela!
-
-</div>
+GPL v3 - Veja o arquivo [LICENSE](LICENSE) para detalhes.
