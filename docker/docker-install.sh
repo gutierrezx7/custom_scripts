@@ -62,7 +62,7 @@ docker --version
 
 if [ $? -eq 0 ]; then
     msg_info "Docker instalado com sucesso!"
-
+    
     # Configurações Específicas
     if [ "$ENV_TYPE" == "lxc" ]; then
         msg_warn "Nota para usuários LXC: Certifique-se de que as opções 'Nesting' e 'keyctl' estejam ativadas nas opções do Container no Proxmox."
@@ -72,7 +72,7 @@ if [ $? -eq 0 ]; then
         if [ -z "$TARGET_USER" ]; then
             read -p "Digite o nome do usuário para adicionar ao grupo docker (deixe em branco para pular): " TARGET_USER
         fi
-
+        
         if [ -n "$TARGET_USER" ]; then
             if id "$TARGET_USER" &>/dev/null; then
                 usermod -aG docker "$TARGET_USER"

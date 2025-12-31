@@ -77,25 +77,25 @@ scan_scripts() {
     local category="$1"
     local scripts=()
     local i=1
-
+    
     if [ ! -d "$category" ]; then
         return
     fi
-
+    
     # Listar arquivos .sh
     for file in "$category"/*.sh; do
         [ -e "$file" ] || continue
-
+        
         # Ler Metadata
         TITLE=$(get_script_metadata "$file" "Title")
         DESC=$(get_script_metadata "$file" "Description")
         SUPPORTED=$(get_script_metadata "$file" "Supported")
-
+        
         # Fallback se não tiver metadata
         if [ -z "$TITLE" ]; then
             TITLE=$(basename "$file")
         fi
-
+        
         # Filtro de Ambiente
         SHOW=true
         if [[ -n "$SUPPORTED" ]]; then
@@ -109,7 +109,7 @@ scan_scripts() {
                  fi
             fi
         fi
-
+        
         if [ "$SHOW" = true ]; then
             # Armazenar no array global
             MENU_ITEMS+=("$file|$TITLE|$DESC")
@@ -130,28 +130,28 @@ show_menu() {
     echo -e "Host: ${CYAN}$(hostname)${NC}"
     echo
     echo "Categorias Disponíveis:"
-
+    
     CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
-
+    
     # Montar Menu Global Dinâmico
     MENU_ITEMS=() # Reset
-
+    
     # 1. Core Setup (Prioridade)
     echo -e "${YELLOW}--- Configuração Inicial ---${NC}"
     i=1
-
+    
     # Adicionar scripts específicos manualmente no topo para garantir ordem, ou scanear
     # Vamos scanear tudo e ordenar por categoria na exibição
-
+    
     GLOBAL_INDEX=1
     declare -A SCRIPT_MAP
-
+    
     for cat in "${CATEGORIES[@]}"; do
         # Captura itens desta categoria
         TEMP_ITEMS=()
         local original_len=${#MENU_ITEMS[@]}
         scan_scripts "$cat" # Popula MENU_ITEMS
-
+        
         # Exibir cabeçalho da categoria se houver novos itens
         local new_len=${#MENU_ITEMS[@]}
         if [ $new_len -gt $original_len ]; then
@@ -164,16 +164,16 @@ show_menu() {
              done
         fi
     done
-
+    
     echo
     echo "  0) Sair"
     echo
     read -p "Selecione uma opção: " CHOICE
-
+    
     if [ "$CHOICE" == "0" ]; then
         exit 0
     fi
-
+    
     if [ -n "${SCRIPT_MAP[$CHOICE]}" ]; then
         FILE="${SCRIPT_MAP[$CHOICE]}"
         msg_header "Executando: $FILE"
@@ -195,7 +195,7 @@ main() {
 
     detect_env
     bootstrap
-
+    
     while true; do
         show_menu
     done
