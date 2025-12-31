@@ -13,9 +13,10 @@ Uma coleção de scripts Linux úteis e sortidos para automatizar tarefas comuns
 ## 📋 Índice
 
 - [Sobre o Projeto](#-sobre-o-projeto)
+- [Instalação Rápida (Menu Interativo)](#-instalação-rápida-menu-interativo)
+- [Todos os Scripts (Atalhos One-Line)](#-todos-os-scripts-atalhos-one-line)
 - [Categorias de Scripts](#-categorias-de-scripts)
 - [Como Usar](#-como-usar)
-- [Instalação Rápida](#-instalação-rápida)
 - [Estrutura do Repositório](#-estrutura-do-repositório)
 - [Contribuindo](#-contribuindo)
 - [Segurança](#-segurança)
@@ -31,6 +32,40 @@ Este repositório contém uma coleção curada de scripts shell para Linux que a
 - 📊 **Monitoramento** - Ferramentas para monitorar recursos do sistema
 - 🐳 **DevOps** - Scripts para Docker, containers e CI/CD
 - 🌐 **Redes** - Utilitários para configuração e diagnóstico de rede
+
+## 🚀 Instalação Rápida (Menu Interativo)
+
+O script principal detecta automaticamente seu ambiente (VM ou LXC) e exibe um menu com as opções compatíveis. Ele clona o repositório localmente para garantir o funcionamento de todos os módulos.
+
+| Função | Comando (One-Line Install) |
+| :--- | :--- |
+| **Menu de Instalação (Setup)** | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup.sh)"` |
+
+## ⚡ Todos os Scripts (Atalhos One-Line)
+
+Lista completa de atalhos para execução direta dos scripts disponíveis.
+
+### 🐳 Docker & Containers
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **Docker** | Instala Docker Engine (VM/LXC) | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/docker-install.sh)"` |
+
+### 🔧 Administração de Sistemas
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **System Prep** | Hostname e Tools Essenciais | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/system-prep.sh)"` |
+| **Update System** | Atualiza pacotes e limpa sistema | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/update-system.sh)"` |
+| **Workspace** | Cria pasta /opt/stack | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/setup-workspace.sh)"` |
+| **Webmin** | Interface web de administração | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/webmin-install.sh)"` |
+| **Portainer** | Gerenciador visual de Docker | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/portainer-install.sh)"` |
+| **DynFi Manager** | Firewall Manager Centralizado | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/DynFi_Manager_installer.sh)"` |
+
+### 🌐 Redes & Segurança
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **IP Estático (VM)** | Configura Netplan | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/network/set-static-ip.sh)"` |
+| **Firewall (VM)** | Configura UFW | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/security/setup-firewall.sh)"` |
+| **AdGuard Home** | DNS e Bloqueador de Anúncios | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/network/adguard-install.sh)"` |
 
 ## 📂 Categorias de Scripts
 
@@ -88,14 +123,10 @@ Scripts para automação e deployment.
 
 ### Método 1: Execução Direta (Recomendado)
 
+Use a tabela de "Instalação Rápida" acima para copiar e colar o comando no seu terminal.
+
 ```bash
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
-```
-
-ou com curl:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
 ```
 
 ### Método 2: Download e Execução
@@ -124,20 +155,11 @@ cd custom_scripts
 bash system-admin/exemplo-script.sh
 ```
 
-## 📦 Instalação Rápida
-
-Para clonar e usar todos os scripts:
-
-```bash
-git clone https://github.com/gutierrezx7/custom_scripts.git ~/custom_scripts
-cd ~/custom_scripts
-chmod +x **/*.sh
-```
-
 ## 📁 Estrutura do Repositório
 
 ```
 custom_scripts/
+├── setup.sh               # Menu Mestre Interativo
 ├── system-admin/          # Administração de sistemas
 │   ├── README.md
 │   └── scripts...
