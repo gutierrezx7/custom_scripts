@@ -107,7 +107,7 @@ scan_scripts() {
         INTERACTIVE=$(get_script_metadata "$file" "Interactive")
         REBOOT=$(get_script_metadata "$file" "Reboot")
         NETWORK=$(get_script_metadata "$file" "Network")
-
+        
         # Defaults
         [ -z "$TITLE" ] && TITLE=$(basename "$file")
         [ -z "$INTERACTIVE" ] && INTERACTIVE="no"
@@ -138,28 +138,28 @@ scan_scripts() {
 show_menu_whiptail() {
     CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
     MENU_ITEMS=()
-
+    
     # Coletar todos os scripts
     for cat in "${CATEGORIES[@]}"; do
         scan_scripts "$cat"
     done
-
+    
     # Construir argumentos para o whiptail
     local WHIP_ARGS=()
     
     for i in "${!MENU_ITEMS[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
-
+        
         # Adiciona Tags visuais na descrição
         local TAGS=""
         [[ "$INTERACTIVE" == "yes" ]] && TAGS+="[Int] "
         [[ "$REBOOT" == "yes" ]] && TAGS+="[Reboot] "
         [[ "$NETWORK" == "risk" ]] && TAGS+="[Net] "
-
+        
         # ID é o índice no array MENU_ITEMS
         WHIP_ARGS+=("$i" "$TAGS$TITLE ($CAT)" "OFF")
     done
-
+    
     if [ ${#WHIP_ARGS[@]} -eq 0 ]; then
         msg_error "Nenhum script disponível para este ambiente ($ENV_TYPE)."
         exit 1
@@ -181,26 +181,27 @@ show_menu_whiptail() {
     if [ -z "$CHOICES" ]; then
         return
     fi
-
+    
     run_queue "$CHOICES"
 }
 
 # Lógica de Execução Inteligente
 run_queue() {
     local choices_str="$1"
-
+    
     local interactive_queue=()
     local safe_queue=()
     local risk_queue=()
-
+    
     # Separar em filas
     for id in $choices_str; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
         
-        if [[ "$INTERACTIVE" == "yes" ]]; then
-            interactive_queue+=("$id")
-        elif [[ "$NETWORK" == "risk" ]]; then
+        # Prioridade de Risco: Se for Network Risk, vai para o final, mesmo se for interativo.
+        if [[ "$NETWORK" == "risk" ]]; then
             risk_queue+=("$id")
+        elif [[ "$INTERACTIVE" == "yes" ]]; then
+            interactive_queue+=("$id")
         else
             safe_queue+=("$id")
         fi
@@ -217,16 +218,16 @@ run_queue() {
     
     for id in "${final_queue[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
-
+        
         msg_header "Executando ($CAT): $TITLE"
         if [[ "$REBOOT" == "yes" ]]; then
             msg_warn "Este script requer reinicialização. O reboot será agendado para o final."
         fi
-
+        
         # Executar Script
         bash "$FILE"
         local ret=$?
-
+        
         if [ $ret -eq 0 ]; then
             msg_info "$TITLE concluído com sucesso."
             if [[ "$REBOOT" == "yes" ]]; then
@@ -236,16 +237,16 @@ run_queue() {
             msg_error "$TITLE falhou (Código: $ret). Continuando..."
             sleep 3
         fi
-
+        
         echo "------------------------------------------------"
     done
-
+    
     finalize
 }
 
 finalize() {
     msg_header "Execução Finalizada"
-
+    
     if [ "$NEED_REBOOT" = true ]; then
         if (whiptail --title "Reinicialização Necessária" --yesno "Um ou mais scripts solicitam reinicialização para aplicar as alterações.\nDeseja reiniciar agora?" 10 60); then
             msg_info "Reiniciando sistema..."
