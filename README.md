@@ -13,9 +13,10 @@ Uma coleção de scripts Linux úteis e sortidos para automatizar tarefas comuns
 ## 📋 Índice
 
 - [Sobre o Projeto](#-sobre-o-projeto)
+- [Instalação Rápida (Scripts Mestre)](#-instalação-rápida-scripts-mestre)
+- [Todos os Scripts (Atalhos One-Line)](#-todos-os-scripts-atalhos-one-line)
 - [Categorias de Scripts](#-categorias-de-scripts)
 - [Como Usar](#-como-usar)
-- [Instalação Rápida](#-instalação-rápida)
 - [Estrutura do Repositório](#-estrutura-do-repositório)
 - [Contribuindo](#-contribuindo)
 - [Segurança](#-segurança)
@@ -31,6 +32,37 @@ Este repositório contém uma coleção curada de scripts shell para Linux que a
 - 📊 **Monitoramento** - Ferramentas para monitorar recursos do sistema
 - 🐳 **DevOps** - Scripts para Docker, containers e CI/CD
 - 🌐 **Redes** - Utilitários para configuração e diagnóstico de rede
+
+## 🚀 Instalação Rápida (Scripts Mestre)
+
+Use estes scripts interativos para configurar seu ambiente do zero. Escolha o script adequado para seu tipo de virtualização.
+
+| Função | Tipo | Comando (One-Line Install) |
+| :--- | :---: | :--- |
+| **Setup Completo VM** | **VM** | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup-vm.sh)"` |
+| **Setup Completo LXC** | **LXC** | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup-lxc.sh)"` |
+
+## ⚡ Todos os Scripts (Atalhos One-Line)
+
+Lista completa de atalhos para execução direta dos scripts disponíveis.
+
+### 🐳 Docker & Containers
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **Docker** | Instala Docker Engine (VM/LXC) | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/docker-install.sh)"` |
+
+### 🔧 Administração de Sistemas
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **Update System** | Atualiza pacotes e limpa sistema | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/update-system.sh)"` |
+| **Webmin** | Interface web de administração | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/webmin-install.sh)"` |
+| **Portainer** | Gerenciador visual de Docker | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/portainer-install.sh)"` |
+| **DynFi Manager** | Firewall Manager Centralizado | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/DynFi_Manager_installer.sh)"` |
+
+### 🌐 Redes
+| Script | Descrição | Comando |
+| :--- | :--- | :--- |
+| **AdGuard Home** | DNS e Bloqueador de Anúncios | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/network/adguard-install.sh)"` |
 
 ## 📂 Categorias de Scripts
 
@@ -88,14 +120,10 @@ Scripts para automação e deployment.
 
 ### Método 1: Execução Direta (Recomendado)
 
+Use a tabela de "Instalação Rápida" acima para copiar e colar o comando no seu terminal.
+
 ```bash
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
-```
-
-ou com curl:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/path/to/script.sh)"
 ```
 
 ### Método 2: Download e Execução
@@ -124,20 +152,12 @@ cd custom_scripts
 bash system-admin/exemplo-script.sh
 ```
 
-## 📦 Instalação Rápida
-
-Para clonar e usar todos os scripts:
-
-```bash
-git clone https://github.com/gutierrezx7/custom_scripts.git ~/custom_scripts
-cd ~/custom_scripts
-chmod +x **/*.sh
-```
-
 ## 📁 Estrutura do Repositório
 
 ```
 custom_scripts/
+├── setup-vm.sh            # Script Mestre para VMs
+├── setup-lxc.sh           # Script Mestre para LXC
 ├── system-admin/          # Administração de sistemas
 │   ├── README.md
 │   └── scripts...

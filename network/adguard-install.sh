@@ -9,25 +9,25 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}Starting AdGuard Home Installation...${NC}"
+echo -e "${GREEN}Iniciando Instalação do AdGuard Home...${NC}"
 
-# Check if running as root
+# Verificar root
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}Please run as root.${NC}"
+  echo -e "${RED}Por favor, execute como root.${NC}"
   exit 1
 fi
 
-echo -e "${YELLOW}Installing dependencies (curl, tar)...${NC}"
+echo -e "${YELLOW}Instalando dependências (curl, tar)...${NC}"
 apt-get update
 apt-get install -y curl tar
 
-echo -e "${YELLOW}Downloading and running official install script...${NC}"
+echo -e "${YELLOW}Baixando e executando script de instalação oficial...${NC}"
 curl -s -S -L https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh | sh -s -- -v
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}AdGuard Home installed successfully!${NC}"
-    echo -e "Access the setup interface at http://$(hostname -I | awk '{print $1}'):3000"
+    echo -e "${GREEN}AdGuard Home instalado com sucesso!${NC}"
+    echo -e "Acesse a interface de configuração em http://$(hostname -I | awk '{print $1}'):3000"
 else
-    echo -e "${RED}AdGuard Home installation failed.${NC}"
+    echo -e "${RED}Falha na instalação do AdGuard Home.${NC}"
     exit 1
 fi

@@ -9,29 +9,29 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}Starting Portainer Installation...${NC}"
+echo -e "${GREEN}Iniciando Instalação do Portainer...${NC}"
 
-# Check if running as root
+# Verificar root
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}Please run as root.${NC}"
+  echo -e "${RED}Por favor, execute como root.${NC}"
   exit 1
 fi
 
 if ! command -v docker &> /dev/null; then
-    echo -e "${RED}Docker is not installed. Please install Docker first (docker/docker-install.sh).${NC}"
+    echo -e "${RED}Docker não está instalado. Por favor, instale o Docker primeiro (docker/docker-install.sh).${NC}"
     exit 1
 fi
 
-echo -e "${YELLOW}Creating Portainer Volume...${NC}"
+echo -e "${YELLOW}Criando Volume do Portainer...${NC}"
 docker volume create portainer_data
 
-echo -e "${YELLOW}Deploying Portainer Container...${NC}"
+echo -e "${YELLOW}Implantando Container do Portainer...${NC}"
 docker run -d -p 8000:8000 -p 9443:9443 --name portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:latest
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}Portainer installed successfully!${NC}"
-    echo -e "Access it at https://$(hostname -I | awk '{print $1}'):9443"
+    echo -e "${GREEN}Portainer instalado com sucesso!${NC}"
+    echo -e "Acesse em https://$(hostname -I | awk '{print $1}'):9443"
 else
-    echo -e "${RED}Portainer installation failed.${NC}"
+    echo -e "${RED}Falha na instalação do Portainer.${NC}"
     exit 1
 fi
