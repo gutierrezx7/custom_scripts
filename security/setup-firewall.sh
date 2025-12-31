@@ -2,6 +2,9 @@
 # Title: Configurar Firewall (UFW)
 # Description: Instala e configura regras padrão do UFW
 # Supported: VM
+# Interactive: yes
+# Reboot: no
+# Network: risk
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

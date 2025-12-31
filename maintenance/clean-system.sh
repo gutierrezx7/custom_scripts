@@ -8,6 +8,9 @@
 # Versão: 1.0
 # Licença: GPL-3.0
 #############################################################
+# Interactive: no
+# Reboot: no
+# Network: safe
 
 set -e
 set -u

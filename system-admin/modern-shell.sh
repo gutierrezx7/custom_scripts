@@ -2,6 +2,9 @@
 # Title: Shell Moderno (Zsh + Fastfetch)
 # Description: Instala Zsh, Oh My Zsh e Fastfetch para um terminal moderno
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

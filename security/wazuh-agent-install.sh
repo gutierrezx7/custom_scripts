@@ -619,6 +619,9 @@ main() {
 trap 'log_error "Script foi interrompido"; exit 1' INT TERM
 
 # Executar
+# Interactive: no
+# Reboot: no
+# Network: safe
 main "$@"
 
 exit 0

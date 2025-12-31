@@ -2,6 +2,9 @@
 # Title: Instalar Tailscale
 # Description: VPN Mesh segura e fácil de configurar
 # Supported: VM, LXC
+# Interactive: yes
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

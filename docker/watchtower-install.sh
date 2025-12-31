@@ -2,6 +2,9 @@
 # Title: Watchtower (Auto-Update)
 # Description: Atualiza automaticamente containers Docker
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

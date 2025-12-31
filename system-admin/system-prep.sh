@@ -2,6 +2,9 @@
 # Title: Preparação do Sistema
 # Description: Atualiza pacotes, define Hostname e instala ferramentas básicas
 # Supported: VM, LXC
+# Interactive: yes
+# Reboot: yes
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

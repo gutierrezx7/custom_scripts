@@ -2,6 +2,9 @@
 # Title: Instalar Portainer
 # Description: Interface gráfica para gerenciamento de Docker
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 # Portainer Installer for Proxmox LXC (Debian/Ubuntu)

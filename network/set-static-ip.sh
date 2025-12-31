@@ -2,6 +2,9 @@
 # Title: Configurar IP Estático
 # Description: Configuração interativa de rede via Netplan
 # Supported: VM
+# Interactive: yes
+# Reboot: yes
+# Network: risk
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

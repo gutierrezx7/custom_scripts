@@ -2,6 +2,9 @@
 # Title: Atualizar Sistema
 # Description: Atualização segura do sistema (apt update/upgrade/clean)
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: yes
+# Network: safe
 # Author: Custom Scripts Team
 
 #############################################################
