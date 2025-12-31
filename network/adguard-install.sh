@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Title: Instalar AdGuard Home
+# Description: Instala AdGuard Home (DNS/AdBlock)
+# Supported: VM, LXC
+# Author: Custom Scripts Team
 
 # AdGuard Home Installer for Proxmox LXC (Debian/Ubuntu)
 # Part of Custom Scripts

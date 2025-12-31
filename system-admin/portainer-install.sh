@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Title: Instalar Portainer
+# Description: Interface gráfica para gerenciamento de Docker
+# Supported: VM, LXC
+# Author: Custom Scripts Team
 
 # Portainer Installer for Proxmox LXC (Debian/Ubuntu)
 # Part of Custom Scripts

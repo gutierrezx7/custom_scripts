@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Title: Instalar Docker
+# Description: Instala Docker Engine, CLI e Compose (Detecta VM/LXC)
+# Supported: VM, LXC
+# Author: Custom Scripts Team
 
 # Docker Installer (VM & LXC)
 # Part of Custom Scripts

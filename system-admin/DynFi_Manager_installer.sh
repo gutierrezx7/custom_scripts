@@ -1,4 +1,9 @@
 #!/bin/bash
+# Title: DynFi Manager Installer
+# Description: Instalação automatizada do DynFi Manager
+# Supported: VM, LXC
+# Author: DynFi / Custom Scripts Team
+
 # 
 # Copyright (c)  2022 Kevin HUART for DynFi
 # Copyright (c) 2023 Gregory BERNARD for DynFi 
