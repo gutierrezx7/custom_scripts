@@ -2,6 +2,9 @@
 # Title: Instalar AdGuard Home
 # Description: Instala AdGuard Home (DNS/AdBlock)
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 # AdGuard Home Installer for Proxmox LXC (Debian/Ubuntu)

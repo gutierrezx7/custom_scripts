@@ -2,6 +2,9 @@
 # Title: DynFi Manager Installer
 # Description: Instalação automatizada do DynFi Manager
 # Supported: VM, LXC
+# Interactive: yes
+# Reboot: no
+# Network: safe
 # Author: DynFi / Custom Scripts Team
 
 # 

@@ -17,6 +17,11 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Variáveis Globais de Estado
+declare -A SCRIPT_MAP
+declare -a ORDERED_SCRIPTS
+NEED_REBOOT=false
+
 msg_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 msg_warn() { echo -e "${YELLOW}[AVISO]${NC} $1"; }
 msg_error() { echo -e "${RED}[ERRO]${NC} $1"; }
@@ -40,7 +45,6 @@ detect_env() {
 
 # Auto-Bootstrap (Clona o repo se não estiver rodando localmente)
 bootstrap() {
-    # Se o diretório atual não é o INSTALL_DIR, ou se não tem .git
     if [[ "$PWD" != "$INSTALL_DIR" ]]; then
         msg_header "Inicialização"
         msg_info "Instalando dependências (git)..."
@@ -65,18 +69,26 @@ bootstrap() {
     fi
 }
 
+# Verificar Dependências do Sistema
+check_dependencies() {
+    if ! command -v whiptail >/dev/null; then
+        msg_info "Instalando whiptail..."
+        apt-get update -qq
+        apt-get install -y whiptail -qq
+    fi
+}
+
 # Funções de Parsing de Script
 get_script_metadata() {
     local file="$1"
     local tag="$2"
+    # Procura pela tag e remove espaços extras
     grep "^# $tag:" "$file" | cut -d: -f2- | sed 's/^[ \t]*//'
 }
 
 # Scanner de Scripts
 scan_scripts() {
     local category="$1"
-    local scripts=()
-    local i=1
     
     if [ ! -d "$category" ]; then
         return
@@ -91,10 +103,16 @@ scan_scripts() {
         DESC=$(get_script_metadata "$file" "Description")
         SUPPORTED=$(get_script_metadata "$file" "Supported")
         
-        # Fallback se não tiver metadata
-        if [ -z "$TITLE" ]; then
-            TITLE=$(basename "$file")
-        fi
+        # Novos Metadados
+        INTERACTIVE=$(get_script_metadata "$file" "Interactive")
+        REBOOT=$(get_script_metadata "$file" "Reboot")
+        NETWORK=$(get_script_metadata "$file" "Network")
+
+        # Defaults
+        [ -z "$TITLE" ] && TITLE=$(basename "$file")
+        [ -z "$INTERACTIVE" ] && INTERACTIVE="no"
+        [ -z "$REBOOT" ] && REBOOT="no"
+        [ -z "$NETWORK" ] && NETWORK="safe"
         
         # Filtro de Ambiente
         SHOW=true
@@ -103,7 +121,6 @@ scan_scripts() {
                 SHOW=false
             fi
             if [[ "$ENV_TYPE" != "LXC" && "$SUPPORTED" != *"VM"* && "$SUPPORTED" != *"ALL"* && -n "$SUPPORTED" ]]; then
-                 # Se for VM e o script só suportar LXC (raro, mas possível)
                  if [[ "$SUPPORTED" == *"LXC"* && "$SUPPORTED" != *"VM"* ]]; then
                      SHOW=false
                  fi
@@ -111,93 +128,151 @@ scan_scripts() {
         fi
         
         if [ "$SHOW" = true ]; then
-            # Armazenar no array global
-            MENU_ITEMS+=("$file|$TITLE|$DESC")
+            # Format: FILE|TITLE|DESC|INTERACTIVE|REBOOT|NETWORK|CATEGORY
+            MENU_ITEMS+=("$file|$TITLE|$DESC|$INTERACTIVE|$REBOOT|$NETWORK|$category")
         fi
     done
 }
 
-# Menu Principal
-show_menu() {
-    clear
-    echo -e "${BLUE}
-    ################################################
-    #            CUSTOM SCRIPTS MANAGER            #
-    ################################################
-    ${NC}"
-    echo -e "Ambiente Detectado: ${CYAN}$ENV_TYPE${NC}"
-    echo -e "IP: ${CYAN}$(hostname -I | awk '{print $1}')${NC}"
-    echo -e "Host: ${CYAN}$(hostname)${NC}"
-    echo
-    echo "Categorias Disponíveis:"
-    
+# Menu Principal com Whiptail
+show_menu_whiptail() {
     CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
-    
-    # Montar Menu Global Dinâmico
-    MENU_ITEMS=() # Reset
-    
-    # 1. Core Setup (Prioridade)
-    echo -e "${YELLOW}--- Configuração Inicial ---${NC}"
-    i=1
-    
-    # Adicionar scripts específicos manualmente no topo para garantir ordem, ou scanear
-    # Vamos scanear tudo e ordenar por categoria na exibição
-    
-    GLOBAL_INDEX=1
-    declare -A SCRIPT_MAP
-    
+    MENU_ITEMS=()
+
+    # Coletar todos os scripts
     for cat in "${CATEGORIES[@]}"; do
-        # Captura itens desta categoria
-        TEMP_ITEMS=()
-        local original_len=${#MENU_ITEMS[@]}
-        scan_scripts "$cat" # Popula MENU_ITEMS
-        
-        # Exibir cabeçalho da categoria se houver novos itens
-        local new_len=${#MENU_ITEMS[@]}
-        if [ $new_len -gt $original_len ]; then
-             echo -e "\n${YELLOW}[ $cat ]${NC}"
-             for (( j=$original_len; j<$new_len; j++ )); do
-                IFS='|' read -r FILE TITLE DESC <<< "${MENU_ITEMS[$j]}"
-                printf " %2d) %-30s %s\n" "$GLOBAL_INDEX" "$TITLE" "($DESC)"
-                SCRIPT_MAP[$GLOBAL_INDEX]="$FILE"
-                ((GLOBAL_INDEX++))
-             done
-        fi
+        scan_scripts "$cat"
     done
+
+    # Construir argumentos para o whiptail
+    local WHIP_ARGS=()
     
-    echo
-    echo "  0) Sair"
-    echo
-    read -p "Selecione uma opção: " CHOICE
+    for i in "${!MENU_ITEMS[@]}"; do
+        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
+
+        # Adiciona Tags visuais na descrição
+        local TAGS=""
+        [[ "$INTERACTIVE" == "yes" ]] && TAGS+="[Int] "
+        [[ "$REBOOT" == "yes" ]] && TAGS+="[Reboot] "
+        [[ "$NETWORK" == "risk" ]] && TAGS+="[Net] "
+
+        # ID é o índice no array MENU_ITEMS
+        WHIP_ARGS+=("$i" "$TAGS$TITLE ($CAT)" "OFF")
+    done
+
+    if [ ${#WHIP_ARGS[@]} -eq 0 ]; then
+        msg_error "Nenhum script disponível para este ambiente ($ENV_TYPE)."
+        exit 1
+    fi
     
-    if [ "$CHOICE" == "0" ]; then
+    CHOICES=$(whiptail --title "Custom Scripts Manager ($ENV_TYPE)" \
+                       --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar." \
+                       22 78 12 \
+                       "${WHIP_ARGS[@]}" 3>&1 1>&2 2>&3)
+    
+    exit_status=$?
+    if [ $exit_status -ne 0 ]; then
         exit 0
     fi
     
-    if [ -n "${SCRIPT_MAP[$CHOICE]}" ]; then
-        FILE="${SCRIPT_MAP[$CHOICE]}"
-        msg_header "Executando: $FILE"
-        bash "$FILE"
-        echo
-        read -p "Pressione Enter para voltar ao menu..."
-    else
-        msg_error "Opção inválida."
-        sleep 1
+    # Remover aspas do output do whiptail
+    CHOICES=$(echo "$CHOICES" | tr -d '"')
+    
+    if [ -z "$CHOICES" ]; then
+        return
     fi
+
+    run_queue "$CHOICES"
+}
+
+# Lógica de Execução Inteligente
+run_queue() {
+    local choices_str="$1"
+
+    local interactive_queue=()
+    local safe_queue=()
+    local risk_queue=()
+
+    # Separar em filas
+    for id in $choices_str; do
+        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
+        
+        if [[ "$INTERACTIVE" == "yes" ]]; then
+            interactive_queue+=("$id")
+        elif [[ "$NETWORK" == "risk" ]]; then
+            risk_queue+=("$id")
+        else
+            safe_queue+=("$id")
+        fi
+    done
+    
+    # Combinar filas na ordem correta
+    # Ordem: Interativos -> Seguros -> Risco de Rede
+    local final_queue=("${interactive_queue[@]}" "${safe_queue[@]}" "${risk_queue[@]}")
+    
+    clear
+    msg_header "Iniciando Execução em Lote"
+    echo "Total de scripts selecionados: ${#final_queue[@]}"
+    sleep 2
+    
+    for id in "${final_queue[@]}"; do
+        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
+
+        msg_header "Executando ($CAT): $TITLE"
+        if [[ "$REBOOT" == "yes" ]]; then
+            msg_warn "Este script requer reinicialização. O reboot será agendado para o final."
+        fi
+
+        # Executar Script
+        bash "$FILE"
+        local ret=$?
+
+        if [ $ret -eq 0 ]; then
+            msg_info "$TITLE concluído com sucesso."
+            if [[ "$REBOOT" == "yes" ]]; then
+                NEED_REBOOT=true
+            fi
+        else
+            msg_error "$TITLE falhou (Código: $ret). Continuando..."
+            sleep 3
+        fi
+
+        echo "------------------------------------------------"
+    done
+
+    finalize
+}
+
+finalize() {
+    msg_header "Execução Finalizada"
+
+    if [ "$NEED_REBOOT" = true ]; then
+        if (whiptail --title "Reinicialização Necessária" --yesno "Um ou mais scripts solicitam reinicialização para aplicar as alterações.\nDeseja reiniciar agora?" 10 60); then
+            msg_info "Reiniciando sistema..."
+            reboot
+        else
+            msg_warn "Por favor, reinicie o sistema manualmente quando possível."
+        fi
+    else
+        msg_info "Todos os processos concluídos. Pressione Enter para sair."
+        read -r
+    fi
+    exit 0
 }
 
 main() {
     # Verificar root
     if [ "$EUID" -ne 0 ]; then
-        msg_error "Por favor, execute como root."
+        echo "Por favor, execute como root."
         exit 1
     fi
 
     detect_env
     bootstrap
+    check_dependencies
     
     while true; do
-        show_menu
+        show_menu_whiptail
     done
 }
 

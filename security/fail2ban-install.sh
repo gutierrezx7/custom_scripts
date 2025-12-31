@@ -2,6 +2,9 @@
 # Title: Instalar Fail2Ban
 # Description: Proteção contra força bruta (SSH e outros serviços)
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

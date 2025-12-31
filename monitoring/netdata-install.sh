@@ -19,6 +19,9 @@ fi
 
 echo -e "${YELLOW}Downloading and running official kickstart script...${NC}"
 # Using --non-interactive to automate install
+# Interactive: no
+# Reboot: no
+# Network: safe
 wget -O /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh --non-interactive
 
 if [ $? -eq 0 ]; then
