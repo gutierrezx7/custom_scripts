@@ -12,6 +12,9 @@ NC='\033[0m'
 echo -e "${GREEN}Starting System Cleanup...${NC}"
 
 # Check if running as root
+# Interactive: no
+# Reboot: no
+# Network: safe
 if [ "$EUID" -ne 0 ]; then
   echo -e "${RED}Please run as root.${NC}"
   exit 1

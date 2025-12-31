@@ -48,3 +48,6 @@ read -r
 
 # Cleanup
 # rm tactical_install.sh
+# Interactive: yes
+# Reboot: no
+# Network: safe

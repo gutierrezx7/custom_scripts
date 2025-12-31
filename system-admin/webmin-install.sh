@@ -2,6 +2,9 @@
 # Title: Instalar Webmin
 # Description: Interface web para administração de sistemas
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 # Webmin Installer for Proxmox LXC (Debian/Ubuntu)

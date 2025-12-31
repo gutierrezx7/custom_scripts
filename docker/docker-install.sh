@@ -2,6 +2,9 @@
 # Title: Instalar Docker
 # Description: Instala Docker Engine, CLI e Compose (Detecta VM/LXC)
 # Supported: VM, LXC
+# Interactive: yes
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 # Docker Installer (VM & LXC)

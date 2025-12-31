@@ -2,6 +2,9 @@
 # Title: Configurar Workspace
 # Description: Cria a estrutura de pastas /opt/stack
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

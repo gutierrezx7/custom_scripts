@@ -52,6 +52,9 @@ Restart=on-failure
 Environment="N8N_PORT=5678"
 Environment="N8N_LISTEN_ADDRESS=0.0.0.0"
 # Environment="WEBHOOK_URL=https://n8n.example.com"
+# Interactive: no
+# Reboot: no
+# Network: safe
 
 [Install]
 WantedBy=multi-user.target

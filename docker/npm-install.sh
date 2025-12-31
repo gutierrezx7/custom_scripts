@@ -2,6 +2,9 @@
 # Title: Nginx Proxy Manager
 # Description: Instala NPM via Docker Compose (Portas 80, 81, 443)
 # Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # Author: Custom Scripts Team
 
 RED='\033[0;31m'

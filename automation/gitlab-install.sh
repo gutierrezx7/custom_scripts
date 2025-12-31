@@ -40,6 +40,9 @@ echo -e "${YELLOW}This may take a while. Ensure you have at least 4GB RAM (8GB r
 
 # We can optionally set EXTERNAL_URL here if the user provided it, but standard install asks or uses defaults.
 # To make it "useful", let's ask for the URL or default to http://hostname
+# Interactive: no
+# Reboot: no
+# Network: safe
 EXTERNAL_URL="http://$(hostname -I | awk '{print $1}')"
 echo -e "${YELLOW}Installing with EXTERNAL_URL=${EXTERNAL_URL}${NC}"
 
