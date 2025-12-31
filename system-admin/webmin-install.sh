@@ -28,28 +28,20 @@ echo -e "${YELLOW}Atualizando listas de pacotes...${NC}"
 apt-get update
 
 echo -e "${YELLOW}Instalando pré-requisitos...${NC}"
-apt-get install -y curl apt-transport-https software-properties-common gnupg2
+apt-get install -y curl gnupg2
 
-echo -e "${YELLOW}Adicionando chave do repositório Webmin...${NC}"
-# Substituído apt-key depreciado pela abordagem signed-by
-# Chave oficial: https://download.webmin.com/jcameron-key.asc
-install -m 0755 -d /usr/share/keyrings
-rm -f /usr/share/keyrings/webmin.gpg # Clean old
+echo -e "${YELLOW}Configurando repositório Webmin (via script oficial)...${NC}"
+# Utiliza o script oficial do Webmin para configurar repositórios e chaves corretamente
+# Isso resolve problemas com chaves DSA antigas no Ubuntu 24.04+
+curl -fsSL https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh | sh -s -- --force
 
-if ! curl -fsSL https://download.webmin.com/jcameron-key.asc | gpg --dearmor -o /usr/share/keyrings/webmin.gpg; then
-    echo -e "${RED}Falha ao baixar chave GPG do Webmin.${NC}"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Falha na configuração do repositório Webmin.${NC}"
     exit 1
 fi
-chmod a+r /usr/share/keyrings/webmin.gpg
-
-echo -e "${YELLOW}Adicionando repositório Webmin...${NC}"
-# Usando HTTPS e a chave correta
-sh -c 'echo "deb [signed-by=/usr/share/keyrings/webmin.gpg] https://download.webmin.com/download/repository sarge contrib" > /etc/apt/sources.list.d/webmin.list'
-
-echo -e "${YELLOW}Atualizando listas de pacotes novamente...${NC}"
-apt-get update
 
 echo -e "${YELLOW}Instalando Webmin...${NC}"
+apt-get update
 apt-get install -y webmin
 
 if [ $? -eq 0 ]; then

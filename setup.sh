@@ -263,7 +263,7 @@ run_queue() {
 
 generate_summary() {
     local summary_text="Resumo da Execução:\n\n"
-
+    
     if [ ${#SUCCESS_SCRIPTS[@]} -gt 0 ]; then
         summary_text+="SUCESSO:\n"
         for s in "${SUCCESS_SCRIPTS[@]}"; do
@@ -284,14 +284,14 @@ generate_summary() {
 
     # Gravar no log
     echo -e "$summary_text" >> "$SUMMARY_LOG"
-
+    
     # Exibir no Whiptail
     whiptail --title "Relatório de Execução" --msgbox "$summary_text" 20 70
 }
 
 finalize() {
     generate_summary
-
+    
     msg_header "Execução Finalizada"
     
     if [ "$NEED_REBOOT" = true ]; then
