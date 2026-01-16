@@ -24,6 +24,7 @@ declare -a ORDERED_SCRIPTS
 NEED_REBOOT=false
 declare -a FAILED_SCRIPTS
 declare -a SUCCESS_SCRIPTS
+declare -a MENU_ITEMS
 
 msg_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 msg_warn() { echo -e "${YELLOW}[AVISO]${NC} $1"; }
@@ -89,6 +90,21 @@ get_script_metadata() {
     grep "^# $tag:" "$file" | cut -d: -f2- | sed 's/^[ \t]*//'
 }
 
+# Scanner de Categorias (Dinâmico)
+scan_categories() {
+    local categories=()
+    # Encontra diretórios contendo arquivos .sh, excluindo '.', templates e pastas ocultas
+    while IFS= read -r dir; do
+        # Remove ./ prefix
+        dir=${dir#./}
+        # Filtros adicionais
+        [[ "$dir" == "templates" || "$dir" == "." ]] && continue
+        categories+=("$dir")
+    done < <(find . -maxdepth 2 -name "*.sh" -printf "%h\n" | sort | uniq | grep -v "^\.$")
+
+    echo "${categories[@]}"
+}
+
 # Scanner de Scripts
 scan_scripts() {
     local category="$1"
@@ -139,47 +155,73 @@ scan_scripts() {
 
 # Menu Principal com Whiptail
 show_menu_whiptail() {
-    CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
     MENU_ITEMS=()
     FAILED_SCRIPTS=()
     SUCCESS_SCRIPTS=()
     NEED_REBOOT=false
     
+    # Detecção Dinâmica de Categorias
+    CATEGORIES=($(scan_categories))
+
     # Coletar todos os scripts
     for cat in "${CATEGORIES[@]}"; do
         scan_scripts "$cat"
     done
     
+    if [ ${#MENU_ITEMS[@]} -eq 0 ]; then
+        msg_error "Nenhum script disponível para este ambiente ($ENV_TYPE) ou nenhum diretório com scripts encontrado."
+        exit 1
+    fi
+
+    # Calcular largura máxima do título para alinhamento
+    MAX_TITLE_LEN=0
+    for i in "${!MENU_ITEMS[@]}"; do
+        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
+        if [ ${#TITLE} -gt $MAX_TITLE_LEN ]; then
+            MAX_TITLE_LEN=${#TITLE}
+        fi
+    done
+
+    # Limite razoável para a coluna de título
+    [ $MAX_TITLE_LEN -gt 40 ] && MAX_TITLE_LEN=40
+    [ $MAX_TITLE_LEN -lt 20 ] && MAX_TITLE_LEN=20
+
     # Construir argumentos para o whiptail
     local WHIP_ARGS=()
     
+    # Classificar e formatar itens
+    # Atualmente a ordem é por Categoria (devido ao loop de categorias) -> Nome do arquivo
+    # Vamos manter essa ordem natural por enquanto, é lógica.
+
     for i in "${!MENU_ITEMS[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
         
-        # Tags visuais
+        # Tags visuais curtas
         local TAGS=""
-        [[ "$INTERACTIVE" == "yes" ]] && TAGS+=" [Int]"
-        [[ "$REBOOT" == "yes" ]] && TAGS+=" [Reboot]"
-        [[ "$NETWORK" == "risk" ]] && TAGS+=" [NetSafe]" # Ou risco, mas vamos padronizar
-        [[ "$NETWORK" != "safe" ]] && TAGS+=" [NetRisk]"
+        [[ "$INTERACTIVE" == "yes" ]] && TAGS+="[I]"
+        [[ "$REBOOT" == "yes" ]] && TAGS+="[R]"
+        [[ "$NETWORK" == "risk" ]] && TAGS+="[Net!]"
 
-        # Formatação estilo tabela
-        # printf "%-30s | %-12s | %s" "$TITLE" "$CAT" "$TAGS"
+        # Truncar título se necessário
+        DISPLAY_TITLE="${TITLE:0:$MAX_TITLE_LEN}"
+
+        # Formatação estilo tabela dinâmica
+        # Coluna 1: Título (preenchido com espaços)
+        # Coluna 2: Categoria
+        # Coluna 3: Tags
+        # Coluna 4: Descrição (truncada pelo whiptail se necessário)
+
         # Usando printf para alinhar texto para o whiptail
-        local DISPLAY_STR=$(printf "%-25s  %-12s  %s" "${TITLE:0:25}" "(${CAT})" "${TAGS}")
+        # Nota: Whiptail usa uma fonte monoespaçada na TUI, então printf funciona bem.
+        local FORMATTED_STR=$(printf "%-${MAX_TITLE_LEN}s  %-15s  %-8s  %s" "$DISPLAY_TITLE" "($CAT)" "$TAGS" "${DESC:0:50}")
         
         # ID é o índice no array MENU_ITEMS
-        WHIP_ARGS+=("$i" "$DISPLAY_STR" "OFF")
+        WHIP_ARGS+=("$i" "$FORMATTED_STR" "OFF")
     done
     
-    if [ ${#WHIP_ARGS[@]} -eq 0 ]; then
-        msg_error "Nenhum script disponível para este ambiente ($ENV_TYPE)."
-        exit 1
-    fi
-    
-    CHOICES=$(whiptail --title "Custom Scripts Manager ($ENV_TYPE)" \
-                       --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar." \
-                       22 85 12 \
+    CHOICES=$(whiptail --title "Gerenciador de Scripts Customizados ($ENV_TYPE)" \
+                       --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar.\n\nLegenda: [I]=Interativo, [R]=Requer Reboot, [Net!]=Risco de Rede" \
+                       22 95 12 \
                        "${WHIP_ARGS[@]}" 3>&1 1>&2 2>&3)
     
     exit_status=$?
