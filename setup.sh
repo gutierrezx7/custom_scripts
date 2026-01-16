@@ -139,7 +139,14 @@ scan_scripts() {
 
 # Menu Principal com Whiptail
 show_menu_whiptail() {
-    CATEGORIES=("system-admin" "docker" "network" "security" "monitoring" "maintenance" "backup")
+    CATEGORIES=()
+    while IFS= read -r -d '' dir; do
+        dir_name=$(basename "$dir")
+        # Ignorar diretórios específicos
+        if [[ "$dir_name" != "templates" && "$dir_name" != "docs" && "$dir_name" != "test" ]]; then
+             CATEGORIES+=("$dir_name")
+        fi
+    done < <(find . -maxdepth 1 -type d -not -path '*/.*' -not -path '.' -print0 | sort -z)
     MENU_ITEMS=()
     FAILED_SCRIPTS=()
     SUCCESS_SCRIPTS=()
@@ -153,6 +160,28 @@ show_menu_whiptail() {
     # Construir argumentos para o whiptail
     local WHIP_ARGS=()
     
+    # Calcular dimensões do terminal
+    local TERM_HEIGHT=$(stty size 2>/dev/null | cut -d ' ' -f 1)
+    local TERM_WIDTH=$(stty size 2>/dev/null | cut -d ' ' -f 2)
+
+    # Fallback caso stty falhe
+    [ -z "$TERM_HEIGHT" ] && TERM_HEIGHT=24
+    [ -z "$TERM_WIDTH" ] && TERM_WIDTH=80
+
+    # Dimensões da caixa e lista
+    local BOX_HEIGHT=$((TERM_HEIGHT - 4))
+    [ $BOX_HEIGHT -lt 10 ] && BOX_HEIGHT=10
+    local LIST_HEIGHT=$((BOX_HEIGHT - 8))
+    [ $LIST_HEIGHT -lt 5 ] && LIST_HEIGHT=5
+    local BOX_WIDTH=$((TERM_WIDTH - 4))
+    [ $BOX_WIDTH -lt 60 ] && BOX_WIDTH=60
+
+    # Calcular largura da coluna de Título dinamicamente
+    # Estrutura: TITLE (VAR)  CATEGORY (14)  TAGS (~20)
+    # Espaço fixo aproximado: 35 chars
+    local MAX_TITLE_LEN=$((BOX_WIDTH - 45))
+    [ $MAX_TITLE_LEN -lt 20 ] && MAX_TITLE_LEN=20
+
     for i in "${!MENU_ITEMS[@]}"; do
         IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
         
@@ -160,13 +189,11 @@ show_menu_whiptail() {
         local TAGS=""
         [[ "$INTERACTIVE" == "yes" ]] && TAGS+=" [Int]"
         [[ "$REBOOT" == "yes" ]] && TAGS+=" [Reboot]"
-        [[ "$NETWORK" == "risk" ]] && TAGS+=" [NetSafe]" # Ou risco, mas vamos padronizar
-        [[ "$NETWORK" != "safe" ]] && TAGS+=" [NetRisk]"
+        [[ "$NETWORK" == "risk" ]] && TAGS+=" [NetRisk]" # Corrigido para NetRisk
+        [[ "$NETWORK" != "safe" && "$NETWORK" != "risk" ]] && TAGS+=" [NetRisk]"
 
-        # Formatação estilo tabela
-        # printf "%-30s | %-12s | %s" "$TITLE" "$CAT" "$TAGS"
-        # Usando printf para alinhar texto para o whiptail
-        local DISPLAY_STR=$(printf "%-25s  %-12s  %s" "${TITLE:0:25}" "(${CAT})" "${TAGS}")
+        # Formatação estilo tabela dinâmica
+        local DISPLAY_STR=$(printf "%-${MAX_TITLE_LEN}s  %-14s  %s" "${TITLE:0:$MAX_TITLE_LEN}" "(${CAT})" "${TAGS}")
         
         # ID é o índice no array MENU_ITEMS
         WHIP_ARGS+=("$i" "$DISPLAY_STR" "OFF")
@@ -179,7 +206,7 @@ show_menu_whiptail() {
     
     CHOICES=$(whiptail --title "Custom Scripts Manager ($ENV_TYPE)" \
                        --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar." \
-                       22 85 12 \
+                       "$BOX_HEIGHT" "$BOX_WIDTH" "$LIST_HEIGHT" \
                        "${WHIP_ARGS[@]}" 3>&1 1>&2 2>&3)
     
     exit_status=$?
