@@ -3,7 +3,7 @@
 
 # Log arguments to a file for verification
 LOG_FILE="${MOCK_WHIPTAIL_LOG:-/tmp/whiptail.log}"
-echo "whiptail $@" >> "$LOG_FILE"
+echo "whiptail $*" >> "$LOG_FILE"
 
 # Determine dialog type
 dialog_type=""
