@@ -192,8 +192,31 @@ confirm() {
         prompt="${message} [y/N]: "
     fi
 
-    read -rp "$(echo -e "${CS_YELLOW}${prompt}${CS_NC}")" answer
-    answer="${answer:-$default}"
+    # Se tivermos `whiptail` disponível e um TTY, usar UI gráfica simples.
+    if check_command whiptail && ([[ -t 0 ]] || [[ -r /dev/tty ]]); then
+        if whiptail --yesno "$message" 8 60; then
+            answer="y"
+        else
+            answer="n"
+        fi
+    else
+        # Tentar ler de stdin; se não estiver disponível, tentar /dev/tty; se ainda
+        # não houver terminal interativo, usar o valor padrão. Usar condicionais
+        # para que falhas no `read` não disparem o `set -e` do script.
+        if [[ -t 0 ]]; then
+            if ! read -rp "$(echo -e "${CS_YELLOW}${prompt}${CS_NC}")" answer; then
+                answer="${default}"
+            fi
+        elif [[ -r /dev/tty ]]; then
+            if ! read -r -p "$(echo -e "${CS_YELLOW}${prompt}${CS_NC}")" answer </dev/tty; then
+                answer="${default}"
+            fi
+        else
+            msg_info "Terminal não interativo: usando resposta padrão '${default}'"
+            answer="${default}"
+        fi
+        answer="${answer:-$default}"
+    fi
 
     [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]]
 }
