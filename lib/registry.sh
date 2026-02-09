@@ -1,52 +1,108 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Custom Scripts - Registry / Auto-Discovery Engine (registry.sh)
-#
-# Escaneia automaticamente TODOS os diretórios do projeto buscando scripts
-# com metadados válidos. Nenhuma referência manual é necessária.
-#
-# Para adicionar um novo script: basta colocar o .sh na pasta certa com o
-# cabeçalho de metadados. O registry encontra sozinho.
 # =============================================================================
 
 [[ -n "${_CS_REGISTRY_LOADED:-}" ]] && return 0
 readonly _CS_REGISTRY_LOADED=1
 
 # ── Arrays globais do registro ───────────────────────────────────────────────
-declare -a CS_REGISTRY_FILES=()      # Caminhos dos scripts
-declare -A CS_REGISTRY_TITLE=()      # file -> title
-declare -A CS_REGISTRY_DESC=()       # file -> description
-declare -A CS_REGISTRY_SUPPORTED=()  # file -> supported environments
+declare -a CS_REGISTRY_FILES=()
+declare -A CS_REGISTRY_TITLE=()
+declare -A CS_REGISTRY_DESC=()
+declare -A CS_REGISTRY_SUPPORTED=()
 declare -A CS_REGISTRY_INTERACTIVE=()
 declare -A CS_REGISTRY_REBOOT=()
 declare -A CS_REGISTRY_NETWORK=()
-declare -A CS_REGISTRY_CATEGORY=()   # file -> category (nome da pasta)
-declare -A CS_REGISTRY_VERSION=()    # file -> version
-declare -A CS_REGISTRY_TAGS=()       # file -> tags
-declare -A CS_REGISTRY_DRYRUN=()     # file -> supports dry-run?
+declare -A CS_REGISTRY_CATEGORY=()
+declare -A CS_REGISTRY_VERSION=()
+declare -A CS_REGISTRY_TAGS=()
+declare -A CS_REGISTRY_DRYRUN=()
 
-# Diretórios e arquivos a ignorar durante o scan
 CS_REGISTRY_IGNORE_DIRS=("templates" "docs" "tests" "lib" ".git" ".github")
 CS_REGISTRY_IGNORE_FILES=("setup.sh")
 
 # ── Nomes amigáveis das categorias ──────────────────────────────────────────
 declare -A CS_CATEGORY_LABELS=(
-    ["system-admin"]="🔧 Sistema & Utilitários"
-    ["docker"]="🐳 Docker & DevOps"
-    ["network"]="🌐 Redes"
-    ["security"]="🛡️ Segurança"
-    ["monitoring"]="📊 Monitoramento"
-    ["maintenance"]="🧹 Manutenção"
-    ["backup"]="💾 Backup"
-    ["automation"]="⚙️ Automação"
+    ["system-admin"]="Sistema & Utilitários"
+    ["docker"]="Docker & DevOps"
+    ["network"]="Redes"
+    ["security"]="Segurança"
+    ["monitoring"]="Monitoramento"
+    ["maintenance"]="Manutenção"
+    ["backup"]="Backup"
+    ["automation"]="Automação"
 )
 
-# ── Parser de metadados ─────────────────────────────────────────────────────
-# Lê os metadados do cabeçalho do script (primeiras 30 linhas).
-# Formato esperado:  # Key: Value
 _cs_get_meta() {
     local file="$1"
-    # Remote mode: fetch list from GitHub API and parse
+    local key="$2"
+    head -30 "$file" | grep -i "^# ${key}:" | head -1 | sed "s/^# ${key}:[ \t]*//" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//'
+}
+
+_cs_is_valid_script() {
+    local file="$1"
+    local title
+    title=$(_cs_get_meta "$file" "Title")
+    [[ -n "$title" ]]
+}
+
+_cs_scan_directory() {
+    local dir="$1"
+    local category
+    category=$(basename "$dir")
+
+    for file in "$dir"/*.sh; do
+        [[ -e "$file" ]] || continue
+
+        local basename_file
+        basename_file=$(basename "$file")
+        local skip=false
+        for ignore in "${CS_REGISTRY_IGNORE_FILES[@]}"; do
+            [[ "$basename_file" == "$ignore" ]] && skip=true && break
+        done
+        [[ "$skip" == "true" ]] && continue
+
+        if ! _cs_is_valid_script "$file"; then
+            msg_debug "Ignorando $file (metadados incompletos - falta 'Title:')"
+            continue
+        fi
+
+        local title desc supported interactive reboot network version tags dryrun
+        title=$(_cs_get_meta "$file" "Title")
+        desc=$(_cs_get_meta "$file" "Description")
+        supported=$(_cs_get_meta "$file" "Supported")
+        interactive=$(_cs_get_meta "$file" "Interactive")
+        reboot=$(_cs_get_meta "$file" "Reboot")
+        network=$(_cs_get_meta "$file" "Network")
+        version=$(_cs_get_meta "$file" "Version")
+        tags=$(_cs_get_meta "$file" "Tags")
+        dryrun=$(_cs_get_meta "$file" "DryRun")
+
+        [[ -z "$supported" ]]   && supported="ALL"
+        [[ -z "$interactive" ]] && interactive="no"
+        [[ -z "$reboot" ]]     && reboot="no"
+        [[ -z "$network" ]]    && network="safe"
+        [[ -z "$version" ]]    && version="1.0"
+        [[ -z "$dryrun" ]]     && dryrun="no"
+
+        CS_REGISTRY_FILES+=("$file")
+        CS_REGISTRY_TITLE["$file"]="$title"
+        CS_REGISTRY_DESC["$file"]="${desc:-$title}"
+        CS_REGISTRY_SUPPORTED["$file"]="$supported"
+        CS_REGISTRY_INTERACTIVE["$file"]="$interactive"
+        CS_REGISTRY_REBOOT["$file"]="$reboot"
+        CS_REGISTRY_NETWORK["$file"]="$network"
+        CS_REGISTRY_CATEGORY["$file"]="$category"
+        CS_REGISTRY_VERSION["$file"]="$version"
+        CS_REGISTRY_TAGS["$file"]="$tags"
+        CS_REGISTRY_DRYRUN["$file"]="$dryrun"
+    done
+}
+
+cs_registry_scan() {
+    local base_dir="${1:-.}"
+
     if [[ "${REMOTE_MODE:-}" == "1" ]]; then
         msg_debug "Registry em modo remoto — consultando GitHub API..."
         CS_REGISTRY_FILES=()
@@ -60,9 +116,7 @@ _cs_get_meta() {
             return 0
         fi
 
-        # Extrair caminhos de .sh do JSON (sem jq)
         grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' | while IFS= read -r path; do
-            # Ignorar paths em dirs excluídos
             local skip=false
             for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
                 if [[ "$path" == "$ignore/*" || "$path" == "$ignore" ]]; then
@@ -71,10 +125,8 @@ _cs_get_meta() {
             done
             [[ "$skip" == "true" ]] && continue
 
-            # Ignorar setup.sh
             if [[ "$(basename "$path")" == "setup.sh" ]]; then continue; fi
 
-            # Ler metadados do raw file
             local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
             local header
             header=$(curl -fsS --max-time 10 "$raw_url" 2>/dev/null | sed -n '1,30p')
@@ -93,7 +145,6 @@ _cs_get_meta() {
 
             category=$(dirname "$path")
 
-            # Defaults
             [[ -z "$supported" ]] && supported="ALL"
             [[ -z "$interactive" ]] && interactive="no"
             [[ -z "$reboot" ]] && reboot="no"
@@ -119,28 +170,23 @@ _cs_get_meta() {
         return 0
     fi
 
-    # Local scan (original behavior)
     CS_REGISTRY_FILES=()
-
-    # Encontrar todos os diretórios de primeiro nível
     while IFS= read -r -d '' dir; do
         local dirname
         dirname=$(basename "$dir")
-    for file in "$dir"/*.sh; do
-        [[ -e "$file" ]] || continue
 
-        # Ignorar arquivos na lista de exclusão
-        local basename_file
-        basename_file=$(basename "$file")
         local skip=false
-        for ignore in "${CS_REGISTRY_IGNORE_FILES[@]}"; do
-            [[ "$basename_file" == "$ignore" ]] && skip=true && break
+        for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
+            [[ "$dirname" == "$ignore" ]] && skip=true && break
         done
         [[ "$skip" == "true" ]] && continue
 
-        # Validar metadados mínimos
+        _cs_scan_directory "$dir"
+    done < <(find "$base_dir" -maxdepth 1 -type d -not -path '*/.*' -not -path "$base_dir" -print0 | sort -z)
 
-# Baixar um script remoto para /tmp e retornar o caminho
+    msg_debug "Registry: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
+}
+
 cs_fetch_script_to_temp() {
     local path="$1"
     local tmp
@@ -154,71 +200,6 @@ cs_fetch_script_to_temp() {
         rm -f "$tmp"
         return 1
     fi
-}
-        if ! _cs_is_valid_script "$file"; then
-            msg_debug "Ignorando $file (metadados incompletos - falta 'Title:')"
-            continue
-        fi
-
-        # Ler todos os metadados
-        local title desc supported interactive reboot network version tags dryrun
-        title=$(_cs_get_meta "$file" "Title")
-        desc=$(_cs_get_meta "$file" "Description")
-        supported=$(_cs_get_meta "$file" "Supported")
-        interactive=$(_cs_get_meta "$file" "Interactive")
-        reboot=$(_cs_get_meta "$file" "Reboot")
-        network=$(_cs_get_meta "$file" "Network")
-        version=$(_cs_get_meta "$file" "Version")
-        tags=$(_cs_get_meta "$file" "Tags")
-        dryrun=$(_cs_get_meta "$file" "DryRun")
-
-        # Defaults inteligentes
-        [[ -z "$supported" ]]   && supported="ALL"
-        [[ -z "$interactive" ]] && interactive="no"
-        [[ -z "$reboot" ]]     && reboot="no"
-        [[ -z "$network" ]]    && network="safe"
-        [[ -z "$version" ]]    && version="1.0"
-        [[ -z "$dryrun" ]]     && dryrun="no"
-
-        # Registrar
-        CS_REGISTRY_FILES+=("$file")
-        CS_REGISTRY_TITLE["$file"]="$title"
-        CS_REGISTRY_DESC["$file"]="${desc:-$title}"
-        CS_REGISTRY_SUPPORTED["$file"]="$supported"
-        CS_REGISTRY_INTERACTIVE["$file"]="$interactive"
-        CS_REGISTRY_REBOOT["$file"]="$reboot"
-        CS_REGISTRY_NETWORK["$file"]="$network"
-        CS_REGISTRY_CATEGORY["$file"]="$category"
-        CS_REGISTRY_VERSION["$file"]="$version"
-        CS_REGISTRY_TAGS["$file"]="$tags"
-        CS_REGISTRY_DRYRUN["$file"]="$dryrun"
-    done
-}
-
-# ── Full Scan ────────────────────────────────────────────────────────────────
-# Escaneia TODAS as pastas do projeto automaticamente.
-cs_registry_scan() {
-    local base_dir="${1:-.}"
-
-    # Reset
-    CS_REGISTRY_FILES=()
-
-    # Encontrar todos os diretórios de primeiro nível
-    while IFS= read -r -d '' dir; do
-        local dirname
-        dirname=$(basename "$dir")
-
-        # Ignorar diretórios excluídos
-        local skip=false
-        for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
-            [[ "$dirname" == "$ignore" ]] && skip=true && break
-        done
-        [[ "$skip" == "true" ]] && continue
-
-        _cs_scan_directory "$dir"
-    done < <(find "$base_dir" -maxdepth 1 -type d -not -path '*/.*' -not -path "$base_dir" -print0 | sort -z)
-
-    msg_debug "Registry: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
 }
 
 # ── Filtro por ambiente ──────────────────────────────────────────────────────
@@ -277,7 +258,7 @@ cs_registry_by_category() {
 # ── Obter label amigável da categoria ───────────────────────────────────────
 cs_category_label() {
     local cat="$1"
-    echo "${CS_CATEGORY_LABELS[$cat]:-📁 ${cat^}}"
+    echo "${CS_CATEGORY_LABELS[$cat]:-${cat}}"
 }
 
 # ── Listar scripts (formato texto para --list) ──────────────────────────────
