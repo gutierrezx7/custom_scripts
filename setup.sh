@@ -195,8 +195,8 @@ show_menu() {
     fi
 
     # Escanear e filtrar
-    cs_registry_scan "${SCRIPT_DIR}"
-    cs_registry_filter_env
+    cs_registry_scan "${SCRIPT_DIR}" || true
+    cs_registry_filter_env || true
 
     if [[ ${#CS_REGISTRY_FILES[@]} -eq 0 ]]; then
         msg_error "Nenhum script disponível para este ambiente (${CS_ENV_TYPE})."
@@ -294,7 +294,7 @@ show_menu() {
 run_specific() {
     local target="$1"
 
-    cs_registry_scan "${SCRIPT_DIR}"
+    cs_registry_scan "${SCRIPT_DIR}" || true
 
     # Buscar por nome parcial
     local found=""
@@ -436,8 +436,8 @@ run_wizard() {
     # ── Passo 4: Selecionar scripts ──────────────────────────────────────
     msg_header "Passo 4/4 — Selecionar Scripts para Instalar"
 
-    cs_registry_scan "${SCRIPT_DIR}"
-    cs_registry_filter_env
+    cs_registry_scan "${SCRIPT_DIR}" || true
+    cs_registry_filter_env || true
 
     local term_h term_w
     term_h=$(tput lines 2>/dev/null || echo 24)
