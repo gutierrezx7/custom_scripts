@@ -17,6 +17,8 @@
 
 | Feature | Descrição |
 |---------|-----------|
+| 🧙 **Wizard Inicial** | Assistente guiado: hostname, IP fixo, timezone e scripts em um fluxo. |
+| ↻ **Resume após Reboot** | Reinicia a máquina e continua de onde parou automaticamente. |
 | 🔍 **Auto-Discovery** | Novos scripts são detectados automaticamente. Basta colocar na pasta. |
 | 🧪 **Dry-Run** | Teste qualquer script com `--dry-run` sem instalar nada. |
 | 📚 **Biblioteca Compartilhada** | Funções comuns em `lib/` — sem código duplicado. |
@@ -38,10 +40,28 @@ O script detecta seu ambiente (VM, LXC, Bare Metal), baixa tudo e abre o menu in
 
 ## 📖 Modos de Uso
 
-### Menu Interativo (recomendado)
+### 🧙 Wizard — Primeira Configuração (recomendado)
+```bash
+sudo bash setup.sh --wizard
+```
+Fluxo guiado em 4 passos:
+1. **Hostname** — Renomear a máquina
+2. **IP Estático** — Configurar via Netplan (opcional)
+3. **Timezone** — Definir fuso horário
+4. **Scripts** — Selecionar o que instalar
+
+Se precisar de reboot (ex: mudança de IP), o sistema reinicia e **continua automaticamente**.
+
+### Menu Interativo
 ```bash
 sudo bash setup.sh
 ```
+
+### ↻ Retomar após reboot
+```bash
+sudo bash setup.sh --resume
+```
+> Normalmente não precisa rodar manualmente — o systemd faz isso por você.
 
 ### Dry-Run — Testar sem instalar
 ```bash
@@ -74,8 +94,9 @@ custom_scripts/
 ├── setup.sh               # 🌟 MENU PRINCIPAL
 ├── lib/                   # 📚 Biblioteca compartilhada
 │   ├── common.sh          #    Funções utilitárias (cores, msg, cs_run)
+│   ├── state.sh           #    Persistência de estado + resume
 │   ├── registry.sh        #    Auto-discovery de scripts
-│   └── runner.sh          #    Motor de execução + dry-run
+│   └── runner.sh          #    Motor de execução + dry-run + reboot
 ├── templates/
 │   └── script-template.sh # 📝 Template para novos scripts
 ├── docs/
@@ -200,28 +221,39 @@ bash tests/run-tests.sh --script docker/meu-script.sh
 ## 🏗️ Arquitetura
 
 ```
-                    ┌──────────────┐
-                    │   setup.sh   │  ← Ponto de entrada
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐
-        │ common.sh  │ │ reg.  │ │ runner.sh │
-        │            │ │ .sh   │ │           │
-        │ • Cores    │ │ • Scan│ │ • Batch   │
-        │ • msg_*    │ │ • Meta│ │ • DryRun  │
-        │ • cs_run() │ │ • Filt│ │ • Report  │
-        │ • Checks   │ │ • List│ │ • Logging │
-        └────────────┘ └───────┘ └───────────┘
-              │
-    ┌─────────┼──────────┐
-    │         │          │
-  ┌─┴──┐  ┌──┴──┐  ┌───┴───┐
-  │ 📁 │  │ 📁  │  │  📁   │   ← Pastas auto-escaneadas
-  │dock│  │netw │  │secur  │
-  │er/ │  │ork/ │  │ity/   │
-  └────┘  └─────┘  └───────┘
+                      ┌──────────────┐
+                      │   setup.sh   │  ← Ponto de entrada
+                      └──────┬───────┘
+                             │
+           ┌─────────────────┼─────────────────┐
+           │                 │                 │
+     ┌─────┴─────┐    ┌─────┴─────┐    ┌──────┴──────┐
+     │ common.sh │    │ registry  │    │  runner.sh  │
+     │           │    │   .sh     │    │             │
+     │ • Cores   │    │ • Scan    │    │ • Batch     │
+     │ • msg_*   │    │ • Meta    │    │ • DryRun    │
+     │ • cs_run  │    │ • Filter  │    │ • Reboot    │
+     │ • Checks  │    │ • List    │    │ • Report    │
+     └───────────┘    └───────────┘    └──────┬──────┘
+                                              │
+                                       ┌──────┴──────┐
+                                       │  state.sh   │
+                                       │             │
+                                       │ • Save/Load │
+                                       │ • systemd   │
+                                       │ • Resume    │
+                                       └──────┬──────┘
+                                              │
+                               /var/lib/custom_scripts/state
+
+           │
+     ┌─────┼──────────┐
+     │     │          │
+   ┌─┴──┐ ┌┴────┐ ┌──┴────┐
+   │ 📁 │ │ 📁  │ │  📁   │   ← Pastas auto-escaneadas
+   │dock│ │netw │ │secur  │
+   │er/ │ │ork/ │ │ity/   │
+   └────┘ └─────┘ └───────┘
 ```
 
 ### Como funciona o Auto-Discovery
@@ -231,6 +263,38 @@ bash tests/run-tests.sh --script docker/meu-script.sh
 3. Para cada `.sh`, lê as primeiras 30 linhas buscando metadados
 4. Scripts com `Title:` válido são registrados automaticamente
 5. Filtra por ambiente (VM, LXC) antes de exibir no menu
+
+### Como funciona o Resume após Reboot
+
+1. O **Wizard** ou o **Runner** detecta que um reboot é necessário
+2. Salva a fila de scripts em `/var/lib/custom_scripts/state`
+3. Instala um serviço **systemd oneshot** (`custom-scripts-resume.service`)
+4. Faz o reboot
+5. No próximo boot, o serviço executa `setup.sh --resume`
+6. O resume lê o state, pula scripts já concluídos, e continua
+7. Ao finalizar tudo, remove o serviço e limpa o estado
+
+```
+  ┌── Wizard / Runner ──┐
+  │  hostname + IP       │
+  │  scripts 1, 2, 3     │
+  │  script 2 precisa ↻  │
+  └──────────┬───────────┘
+             │
+  ┌──────────▼───────────┐
+  │  Salva estado:       │
+  │  ✔ script 1 (DONE)   │
+  │  ✔ script 2 (DONE)   │
+  │  ⏳ script 3 (PENDING)│
+  └──────────┬───────────┘
+             │ reboot
+  ┌──────────▼───────────┐
+  │  systemd resume      │
+  │  setup.sh --resume   │
+  │  ⏳ script 3 → RUN    │
+  │  ✔ DONE!             │
+  └──────────────────────┘
+```
 
 ### Como funciona o Dry-Run
 

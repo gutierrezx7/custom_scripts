@@ -96,6 +96,7 @@ set -u  # Agora é seguro ativar nounset
 
 # ── Carregar bibliotecas ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/state.sh"
 source "${SCRIPT_DIR}/lib/registry.sh"
 source "${SCRIPT_DIR}/lib/runner.sh"
 
@@ -260,6 +261,8 @@ ${CS_BOLD}Uso:${CS_NC}
 
 ${CS_BOLD}Opções:${CS_NC}
   ${CS_GREEN}(sem opções)${CS_NC}         Menu interativo (recomendado)
+  ${CS_GREEN}--wizard${CS_NC}             Assistente inicial (hostname, IP, scripts)
+  ${CS_GREEN}--resume${CS_NC}             Retomar execução interrompida por reboot
   ${CS_GREEN}--list${CS_NC}               Listar todos os scripts disponíveis
   ${CS_GREEN}--dry-run${CS_NC}            Modo simulação (nada é instalado)
   ${CS_GREEN}--run <script>${CS_NC}       Executar script específico (nome parcial)
@@ -269,15 +272,345 @@ ${CS_BOLD}Opções:${CS_NC}
 
 ${CS_BOLD}Exemplos:${CS_NC}
   bash setup.sh                          # Menu interativo
+  bash setup.sh --wizard                 # Assistente: hostname + IP + scripts
   bash setup.sh --dry-run                # Testar sem instalar nada
   bash setup.sh --list                   # Ver scripts disponíveis
   bash setup.sh --run docker-install     # Instalar Docker direto
-  bash setup.sh --dry-run --run tailscale # Simular instalação do Tailscale
+  bash setup.sh --resume                 # Continuar após reboot
 
 ${CS_BOLD}Mais informações:${CS_NC}
   https://github.com/gutierrezx7/custom_scripts
 
 EOF
+}
+
+# ── Assistente Inicial (Wizard) ──────────────────────────────────────────────
+# Fluxo guiado: Hostname → IP Estático → Timezone → Seleção de Scripts
+# Coleta tudo primeiro, aplica junto, e faz reboot com resume se necessário
+run_wizard() {
+    if ! check_command whiptail; then
+        msg_step "Instalando whiptail..."
+        cs_apt_install whiptail
+    fi
+
+    local current_hostname new_hostname
+    local set_static_ip="no" static_iface="" static_ip="" static_gw="" static_dns=""
+    local current_tz new_tz
+    local need_reboot_for_wizard=false
+
+    msg_header "🧙 Assistente de Configuração Inicial"
+    echo ""
+    echo -e "  ${CS_DIM}Este assistente vai configurar a máquina passo a passo.${CS_NC}"
+    echo -e "  ${CS_DIM}Se precisar reiniciar, ele retoma de onde parou.${CS_NC}"
+    echo ""
+
+    # ── Passo 1: Hostname ────────────────────────────────────────────────
+    msg_header "Passo 1/4 — Hostname"
+    current_hostname=$(hostname)
+    echo -e "  Hostname atual: ${CS_BOLD}${current_hostname}${CS_NC}"
+
+    new_hostname=$(whiptail --inputbox \
+        "Digite o novo hostname para esta máquina:\n\n(Deixe vazio para manter: ${current_hostname})" \
+        10 60 "$current_hostname" \
+        3>&1 1>&2 2>&3) || new_hostname="$current_hostname"
+
+    [[ -z "$new_hostname" ]] && new_hostname="$current_hostname"
+
+    # ── Passo 2: IP Estático ─────────────────────────────────────────────
+    detect_env
+    if [[ "$CS_ENV_TYPE" != "LXC" ]]; then
+        msg_header "Passo 2/4 — Rede (IP Estático)"
+
+        local default_iface current_ip
+        default_iface=$(ip route 2>/dev/null | grep default | awk '{print $5}' | head -n1)
+        current_ip=$(ip -4 addr show "$default_iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}/\d+' | head -1)
+
+        echo -e "  Interface: ${CS_BOLD}${default_iface:-N/A}${CS_NC}"
+        echo -e "  IP atual:  ${CS_BOLD}${current_ip:-DHCP}${CS_NC}"
+
+        if whiptail --yesno "Deseja configurar um IP estático?\n\nInterface: ${default_iface}\nIP atual: ${current_ip:-DHCP}" \
+            12 60 3>&1 1>&2 2>&3; then
+
+            set_static_ip="yes"
+
+            static_iface=$(whiptail --inputbox "Interface de rede:" 8 60 "$default_iface" \
+                3>&1 1>&2 2>&3) || static_iface="$default_iface"
+
+            static_ip=$(whiptail --inputbox "Endereço IP com máscara (ex: 192.168.1.50/24):" 8 60 "${current_ip:-192.168.1.50/24}" \
+                3>&1 1>&2 2>&3) || static_ip=""
+
+            local default_gw
+            default_gw=$(ip route 2>/dev/null | grep default | awk '{print $3}' | head -n1)
+            static_gw=$(whiptail --inputbox "Gateway padrão:" 8 60 "${default_gw:-192.168.1.1}" \
+                3>&1 1>&2 2>&3) || static_gw=""
+
+            static_dns=$(whiptail --inputbox "Servidores DNS (separados por vírgula):" 8 60 "1.1.1.1, 8.8.8.8" \
+                3>&1 1>&2 2>&3) || static_dns="1.1.1.1, 8.8.8.8"
+
+            if [[ -z "$static_ip" || -z "$static_gw" ]]; then
+                msg_warn "Dados incompletos. IP estático será ignorado."
+                set_static_ip="no"
+            fi
+        fi
+    else
+        msg_step "Passo 2/4 — Rede: Pulado (LXC — configure IP no host/Proxmox)."
+    fi
+
+    # ── Passo 3: Timezone ────────────────────────────────────────────────
+    msg_header "Passo 3/4 — Fuso Horário"
+    current_tz=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "UTC")
+    echo -e "  Timezone atual: ${CS_BOLD}${current_tz}${CS_NC}"
+
+    new_tz=$(whiptail --inputbox \
+        "Fuso horário (ex: America/Sao_Paulo):\n\n(Atual: ${current_tz})" \
+        10 60 "$current_tz" \
+        3>&1 1>&2 2>&3) || new_tz="$current_tz"
+
+    [[ -z "$new_tz" ]] && new_tz="$current_tz"
+
+    # ── Passo 4: Selecionar scripts ──────────────────────────────────────
+    msg_header "Passo 4/4 — Selecionar Scripts para Instalar"
+
+    cs_registry_scan "${SCRIPT_DIR}"
+    cs_registry_filter_env
+
+    local term_h term_w
+    term_h=$(tput lines 2>/dev/null || echo 24)
+    term_w=$(tput cols 2>/dev/null || echo 80)
+    local box_h=$((term_h - 4)); [[ $box_h -lt 12 ]] && box_h=12
+    local box_w=$((term_w - 4)); [[ $box_w -lt 60 ]] && box_w=60
+    local list_h=$((box_h - 8)); [[ $list_h -lt 5 ]] && list_h=5
+    local max_title=$((box_w - 45)); [[ $max_title -lt 20 ]] && max_title=20
+
+    local whip_args=()
+    local -a indexed_files=()
+    local idx=0
+
+    while IFS= read -r cat; do
+        while IFS= read -r file; do
+            local title="${CS_REGISTRY_TITLE[$file]}"
+            local tags=""
+            [[ "${CS_REGISTRY_INTERACTIVE[$file]}" == "yes" ]] && tags+=" ⚙"
+            [[ "${CS_REGISTRY_REBOOT[$file]}" == "yes" ]]      && tags+=" ↻"
+            [[ "${CS_REGISTRY_NETWORK[$file]}" == "risk" ]]    && tags+=" ⚠"
+
+            local display
+            display=$(printf "%-${max_title}s  (%-12s) %s" "${title:0:$max_title}" "$cat" "$tags")
+
+            whip_args+=("$idx" "$display" "OFF")
+            indexed_files+=("$file")
+            ((idx++))
+        done < <(cs_registry_by_category "$cat")
+    done < <(cs_registry_categories)
+
+    local choices=""
+    if [[ ${#whip_args[@]} -gt 0 ]]; then
+        choices=$(whiptail \
+            --title "Wizard - Selecionar Scripts [${CS_ENV_TYPE}]" \
+            --checklist "Selecione scripts adicionais para instalar:\n(ESPAÇO = selecionar, ENTER = confirmar, vazio = pular)" \
+            "$box_h" "$box_w" "$list_h" \
+            "${whip_args[@]}" \
+            3>&1 1>&2 2>&3) || choices=""
+    fi
+
+    local selected_files=()
+    if [[ -n "$choices" ]]; then
+        choices=$(echo "$choices" | tr -d '"')
+        for id in $choices; do
+            selected_files+=("${indexed_files[$id]}")
+        done
+    fi
+
+    # ── Resumo e confirmação ─────────────────────────────────────────────
+    clear
+    msg_header "📋 Resumo do Assistente"
+    echo ""
+    echo -e "  ${CS_BOLD}Hostname:${CS_NC}  ${current_hostname} → ${CS_CYAN}${new_hostname}${CS_NC}"
+
+    if [[ "$set_static_ip" == "yes" ]]; then
+        echo -e "  ${CS_BOLD}IP:${CS_NC}        ${static_iface}: ${CS_CYAN}${static_ip}${CS_NC}"
+        echo -e "  ${CS_BOLD}Gateway:${CS_NC}   ${static_gw}"
+        echo -e "  ${CS_BOLD}DNS:${CS_NC}       ${static_dns}"
+    else
+        echo -e "  ${CS_BOLD}IP:${CS_NC}        ${CS_DIM}(manter atual / DHCP)${CS_NC}"
+    fi
+
+    echo -e "  ${CS_BOLD}Timezone:${CS_NC}  ${current_tz} → ${CS_CYAN}${new_tz}${CS_NC}"
+
+    if [[ ${#selected_files[@]} -gt 0 ]]; then
+        echo -e "  ${CS_BOLD}Scripts (${#selected_files[@]}):${CS_NC}"
+        for file in "${selected_files[@]}"; do
+            echo -e "    ${CS_CYAN}•${CS_NC} ${CS_REGISTRY_TITLE[$file]} ${CS_DIM}(${CS_REGISTRY_CATEGORY[$file]})${CS_NC}"
+        done
+    else
+        echo -e "  ${CS_BOLD}Scripts:${CS_NC}   ${CS_DIM}(nenhum selecionado)${CS_NC}"
+    fi
+    echo ""
+
+    if ! confirm "Aplicar todas estas configurações?" "y"; then
+        msg_info "Assistente cancelado."
+        return 0
+    fi
+
+    # ── Aplicar configurações ────────────────────────────────────────────
+    msg_header "⚡ Aplicando Configurações"
+
+    # Hostname
+    if [[ "$new_hostname" != "$current_hostname" ]]; then
+        msg_step "Alterando hostname para ${new_hostname}..."
+        if [[ "${CS_DRY_RUN}" == "true" ]]; then
+            msg_dry_run "hostnamectl set-hostname $new_hostname"
+        else
+            hostnamectl set-hostname "$new_hostname"
+            sed -i "s/127.0.1.1.*${current_hostname}/127.0.1.1\t${new_hostname}/g" /etc/hosts 2>/dev/null || true
+            # Garantir que existe a entrada
+            if ! grep -q "127.0.1.1" /etc/hosts; then
+                echo -e "127.0.1.1\t${new_hostname}" >> /etc/hosts
+            fi
+        fi
+        msg_success "Hostname: ${new_hostname}"
+    fi
+
+    # Timezone
+    if [[ "$new_tz" != "$current_tz" ]]; then
+        msg_step "Configurando timezone: ${new_tz}..."
+        cs_run timedatectl set-timezone "$new_tz" 2>/dev/null || true
+        msg_success "Timezone: ${new_tz}"
+    fi
+
+    # IP Estático
+    if [[ "$set_static_ip" == "yes" ]]; then
+        msg_step "Configurando IP estático..."
+        local netplan_file="/etc/netplan/99-custom-scripts.yaml"
+
+        if [[ "${CS_DRY_RUN}" == "true" ]]; then
+            msg_dry_run "Criaria $netplan_file com IP $static_ip"
+        else
+            cat > "$netplan_file" << NETEOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ${static_iface}:
+      dhcp4: no
+      addresses:
+        - ${static_ip}
+      routes:
+        - to: default
+          via: ${static_gw}
+      nameservers:
+        addresses: [${static_dns}]
+NETEOF
+            chmod 600 "$netplan_file"
+            msg_success "IP estático configurado (será aplicado no reboot)"
+            need_reboot_for_wizard=true
+        fi
+    fi
+
+    # Atualizar pacotes básicos
+    msg_step "Atualizando sistema e instalando ferramentas básicas..."
+    cs_run apt-get update -qq
+    cs_run apt-get upgrade -y
+    cs_run apt-get install -y curl wget git htop unzip nano
+
+    msg_success "Sistema base configurado."
+
+    # ── Executar scripts selecionados ────────────────────────────────────
+    if [[ ${#selected_files[@]} -gt 0 ]]; then
+        # Se precisa reiniciar por causa do IP antes de rodar scripts,
+        # salvar scripts como pendentes para resume
+        if [[ "$need_reboot_for_wizard" == "true" && "${CS_DRY_RUN}" != "true" ]]; then
+            msg_header "↻ Reboot necessário antes de instalar scripts"
+            msg_info "A mudança de IP será aplicada no próximo boot."
+            msg_info "Os ${#selected_files[@]} scripts serão instalados automaticamente após o reboot."
+
+            # Salvar fila para resume
+            cs_state_save_queue "${selected_files[@]}"
+            cs_state_reboot_and_resume "${SCRIPT_DIR}"
+            exit 0
+        fi
+
+        # Sem reboot pendente — executar normalmente
+        cs_runner_reset
+        cs_run_batch "${selected_files[@]}"
+    else
+        # Sem scripts, mas pode precisar de reboot (hostname/IP)
+        if [[ "$need_reboot_for_wizard" == "true" || "$new_hostname" != "$current_hostname" ]]; then
+            echo ""
+            msg_warn "Recomendado reiniciar para aplicar hostname/rede."
+            if confirm "Reiniciar agora?" "y"; then
+                reboot
+            fi
+        fi
+    fi
+
+    echo ""
+    msg_success "Assistente concluído! 🎉"
+}
+
+# ── Retomar execução pendente ────────────────────────────────────────────────
+run_resume() {
+    show_banner
+
+    # Carregar registry para ter os metadados disponíveis
+    cs_registry_scan "${SCRIPT_DIR}"
+
+    cs_runner_reset
+    cs_run_resume
+}
+
+# ── Menu principal (com opção de wizard) ─────────────────────────────────────
+show_main_menu() {
+    if ! check_command whiptail; then
+        msg_step "Instalando whiptail..."
+        cs_apt_install whiptail
+    fi
+
+    # Verificar se há execução pendente
+    if cs_state_has_pending; then
+        msg_warn "Há uma execução pendente de uma sessão anterior!"
+        cs_registry_scan "${SCRIPT_DIR}"
+        cs_state_print_summary
+
+        if confirm "Retomar execução pendente?" "y"; then
+            run_resume
+            return
+        else
+            msg_info "Descartando estado anterior..."
+            cs_state_cleanup
+        fi
+    fi
+
+    local term_h term_w
+    term_h=$(tput lines 2>/dev/null || echo 24)
+    term_w=$(tput cols 2>/dev/null || echo 80)
+    local box_h=14; [[ $term_h -gt 20 ]] && box_h=16
+    local box_w=$((term_w - 10)); [[ $box_w -lt 60 ]] && box_w=60; [[ $box_w -gt 80 ]] && box_w=80
+
+    local choice
+    choice=$(whiptail \
+        --title "Custom Scripts v${VERSION} [${CS_ENV_TYPE}]" \
+        --menu "Escolha uma opção:\n" \
+        "$box_h" "$box_w" 4 \
+        "1" "🧙 Assistente Inicial (Hostname, IP, Scripts)" \
+        "2" "📦 Selecionar Scripts (menu avançado)" \
+        "3" "📋 Listar scripts disponíveis" \
+        "4" "❌ Sair" \
+        3>&1 1>&2 2>&3) || choice="4"
+
+    case "$choice" in
+        1) run_wizard ;;
+        2) show_menu ;;
+        3)
+            cs_registry_scan "${SCRIPT_DIR}"
+            cs_registry_filter_env
+            cs_registry_print
+            ;;
+        4)
+            msg_info "Até a próxima! 👋"
+            exit 0
+            ;;
+    esac
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -293,6 +626,8 @@ main() {
             --no-color)  NO_COLOR=1; shift ;;
             --list)      action="list"; shift ;;
             --run)       action="run"; run_target="${2:-}"; shift 2 ;;
+            --wizard)    action="wizard"; shift ;;
+            --resume)    action="resume"; shift ;;
             --version)   echo "Custom Scripts v${VERSION}"; exit 0 ;;
             --help|-h)   show_help; exit 0 ;;
             *)           msg_error "Opção desconhecida: $1"; show_help; exit 1 ;;
@@ -322,10 +657,17 @@ main() {
             fi
             run_specific "$run_target"
             ;;
+        wizard)
+            show_banner
+            run_wizard
+            ;;
+        resume)
+            run_resume
+            ;;
         menu)
             show_banner
             while true; do
-                show_menu
+                show_main_menu
                 echo ""
                 if ! confirm "Voltar ao menu principal?" "y"; then
                     msg_info "Até a próxima! 👋"
