@@ -135,8 +135,13 @@ detect_distro() {
 
 # ── Instalação de pacotes (APT) ─────────────────────────────────────────────
 cs_apt_install() {
-    cs_run apt-get update -qq
-    cs_run apt-get install -y "$@"
+    export DEBIAN_FRONTEND=noninteractive
+    # update é best-effort (pode falhar por chaves expiradas, repos offline, etc.)
+    cs_run apt-get update -qq 2>/dev/null || msg_warn "apt-get update retornou erro (tentando instalar mesmo assim...)"
+    cs_run apt-get install -y -qq "$@" || {
+        msg_error "Falha ao instalar pacote(s): $*"
+        return 1
+    }
 }
 
 # ── Verificar dependências (lista) ──────────────────────────────────────────
