@@ -67,7 +67,28 @@ bootstrap() {
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         _bs_step "Atualizando repositório em $INSTALL_DIR..."
         cd "$INSTALL_DIR"
-        git pull --quiet 2>/dev/null || _bs_warn "Falha ao atualizar (usando versão local)."
+
+        _bs_step "Conectando ao remoto origin..."
+        if git remote show origin &>/dev/null; then
+            _bs_step "Buscando alterações remotas..."
+            if git fetch --all --prune --quiet 2>/dev/null; then
+                # Detectar branch padrão remoto
+                remote_default=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p' | tr -d '\r\n')
+                remote_default=${remote_default:-main}
+                _bs_step "Sincronizando com origin/${remote_default}..."
+                if git reset --hard "origin/${remote_default}" &>/dev/null; then
+                    _bs_info "Repositório atualizado para origin/${remote_default}."
+                else
+                    _bs_warn "Falha ao forçar reset. Tentando pull normal..."
+                    git pull --rebase --autostash --quiet 2>/dev/null || _bs_warn "Falha ao atualizar (usando versão local)."
+                fi
+            else
+                _bs_warn "Não foi possível buscar do remoto; usando versão local em $INSTALL_DIR."
+            fi
+        else
+            _bs_warn "Remoto 'origin' não encontrado; usando versão local em $INSTALL_DIR."
+        fi
+
         exec bash "$INSTALL_DIR/setup.sh" "${forward_args[@]}"
     fi
 
@@ -75,12 +96,21 @@ bootstrap() {
     _bs_header "Primeira Execução"
     if ! command -v git &>/dev/null; then
         _bs_step "Instalando git..."
-        apt-get update -qq
-        apt-get install -y git -qq
+        # Tentar atualizar cache (não fatal aqui) e instalar git
+        if ! apt-get update -qq 2>/dev/null; then
+            _bs_warn "apt-get update falhou — tentando instalar git mesmo assim"
+        fi
+        if ! apt-get install -y git -qq; then
+            _bs_error "Falha ao instalar 'git'. Verifique sua conexão/repositórios."
+            exit 1
+        fi
     fi
 
     _bs_step "Clonando repositório para $INSTALL_DIR..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    if ! git clone "$REPO_URL" "$INSTALL_DIR"; then
+        _bs_error "Falha ao clonar repositório ${REPO_URL} para ${INSTALL_DIR}."
+        exit 1
+    fi
     cd "$INSTALL_DIR"
     chmod +x setup.sh
 
@@ -593,7 +623,7 @@ show_main_menu() {
         --menu "Escolha uma opção:\n" \
         "$box_h" "$box_w" 4 \
         "1" "🧙 Assistente Inicial (Hostname, IP, Scripts)" \
-        "2" "📦 Selecionar Scripts (menu avançado)" \
+        "2" "📦 Selecionar Scripts" \
         "3" "📋 Listar scripts disponíveis" \
         "4" "❌ Sair" \
         3>&1 1>&2 2>&3) || choice="4"

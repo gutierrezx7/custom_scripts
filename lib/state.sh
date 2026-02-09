@@ -30,6 +30,16 @@ _cs_state_init() {
     mkdir -p "$CS_STATE_DIR"
 }
 
+# Atualiza o status de um arquivo no STATE_FILE de forma atômica
+_cs_state_update_status() {
+    local file_path="$1"
+    local from_status="$2"
+    local to_status="$3"
+    [[ ! -f "$CS_STATE_FILE" ]] && return
+
+    awk -F'|' -v f="$file_path" -v fr="$from_status" -v to="$to_status" 'BEGIN{OFS=FS} {if($1==fr && $2==f) $1=to; print}' "$CS_STATE_FILE" > "${CS_STATE_FILE}.tmp" && mv "${CS_STATE_FILE}.tmp" "$CS_STATE_FILE"
+}
+
 # ── Verificar se existe estado pendente ──────────────────────────────────────
 cs_state_has_pending() {
     [[ -f "$CS_STATE_FILE" ]] && grep -q "^PENDING|" "$CS_STATE_FILE" 2>/dev/null
@@ -62,9 +72,9 @@ cs_state_mark_done() {
     local file="$1"
     [[ ! -f "$CS_STATE_FILE" ]] && return
 
-    # Substitui PENDING|file ou RUNNING|file por DONE|file
-    sed -i "s|^PENDING|${file}$|DONE|${file}|" "$CS_STATE_FILE" 2>/dev/null
-    sed -i "s|^RUNNING|${file}$|DONE|${file}|" "$CS_STATE_FILE" 2>/dev/null
+    # Substitui PENDING|file ou RUNNING|file por DONE|file (atômico)
+    _cs_state_update_status "$file" "PENDING" "DONE"
+    _cs_state_update_status "$file" "RUNNING" "DONE"
 }
 
 # ── Marcar script como em execução ───────────────────────────────────────────
@@ -72,7 +82,8 @@ cs_state_mark_running() {
     local file="$1"
     [[ ! -f "$CS_STATE_FILE" ]] && return
 
-    sed -i "s|^PENDING|${file}$|RUNNING|${file}|" "$CS_STATE_FILE" 2>/dev/null
+    # Marca apenas a entrada PENDING|file → RUNNING|file
+    _cs_state_update_status "$file" "PENDING" "RUNNING"
 }
 
 # ── Marcar script como falho ────────────────────────────────────────────────
@@ -80,8 +91,9 @@ cs_state_mark_failed() {
     local file="$1"
     [[ ! -f "$CS_STATE_FILE" ]] && return
 
-    sed -i "s|^PENDING|${file}$|FAILED|${file}|" "$CS_STATE_FILE" 2>/dev/null
-    sed -i "s|^RUNNING|${file}$|FAILED|${file}|" "$CS_STATE_FILE" 2>/dev/null
+    # Marca PENDING/RUNNING → FAILED (atômico)
+    _cs_state_update_status "$file" "PENDING" "FAILED"
+    _cs_state_update_status "$file" "RUNNING" "FAILED"
 }
 
 # ── Obter scripts pendentes ─────────────────────────────────────────────────
@@ -164,6 +176,12 @@ cs_state_install_resume_service() {
     local install_dir="${1:-/opt/custom_scripts}"
 
     msg_step "Instalando serviço de retomada pós-reboot..."
+
+    # Verificar se systemd está disponível
+    if ! command -v systemctl &>/dev/null || [[ ! -d "/run/systemd/system" ]]; then
+        msg_warn "systemd não detectado; não é possível instalar serviço de retomada. Estado salvo em ${CS_STATE_FILE}."
+        return 0
+    fi
 
     cat > "$CS_RESUME_SERVICE_FILE" << EOF
 [Unit]
