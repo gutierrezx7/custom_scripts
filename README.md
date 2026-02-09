@@ -34,6 +34,11 @@
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup.sh)"
 ```
 
+### ✅ Comando exato (com debug, se fechar sozinho)
+```bash
+CS_DEBUG=1 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup.sh)"
+```
+
 O script detecta seu ambiente (VM, LXC, Bare Metal), baixa tudo e abre o menu interativo.
 
 ---

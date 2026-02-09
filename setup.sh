@@ -22,6 +22,13 @@ set -eo pipefail
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="/opt/custom_scripts"
 VERSION="2.0.0"
+BUILD_DATE="2026-02-09"
+
+# Debug opcional (export CS_DEBUG=1)
+if [[ "${CS_DEBUG:-}" == "1" ]]; then
+    set -x
+    trap '_bs_error "Falha em: ${BASH_SOURCE[0]}:${LINENO} -> ${BASH_COMMAND}"' ERR
+fi
 
 # ── Funções mínimas para fase de bootstrap ───────────────────────────────────
 # Usadas ANTES de lib/common.sh estar disponível (execução remota via wget/curl)
@@ -166,6 +173,12 @@ BANNER
     detect_env
     detect_distro
     echo -e "  ${CS_DIM}Ambiente:${CS_NC} ${CS_BOLD}${CS_ENV_TYPE}${CS_NC}  │  ${CS_DIM}Distro:${CS_NC} ${CS_BOLD}${CS_DISTRO_PRETTY}${CS_NC}"
+
+    if [[ "${REMOTE_MODE:-}" == "1" ]]; then
+        echo -e "  ${CS_DIM}Fonte:${CS_NC} ${CS_BOLD}GitHub (raw/main)${CS_NC}  │  ${CS_DIM}Build:${CS_NC} ${CS_BOLD}${BUILD_DATE}${CS_NC}"
+    else
+        echo -e "  ${CS_DIM}Fonte:${CS_NC} ${CS_BOLD}Local${CS_NC}  │  ${CS_DIM}Build:${CS_NC} ${CS_BOLD}${BUILD_DATE}${CS_NC}"
+    fi
 
     if [[ "${CS_DRY_RUN}" == "true" ]]; then
         echo -e "  ${CS_MAGENTA}${CS_BOLD}DRY-RUN ATIVO - Nenhuma alteração será feita${CS_NC}"
