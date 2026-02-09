@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-# NetData Installer for Proxmox LXC (Debian/Ubuntu)
-# Part of Custom Scripts
+# Title: Instalar NetData
+# Description: Instala o NetData (monitoramento) via script oficial
+# Supported: LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # License: GPL v3
 
 RED='\033[0;31m'

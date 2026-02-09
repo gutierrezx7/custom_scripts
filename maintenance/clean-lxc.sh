@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-# Clean LXC Script (Debian/Ubuntu)
-# Part of Custom Scripts
+# Title: Limpeza de LXC
+# Description: Script de limpeza para containers LXC (cache, logs)
+# Supported: LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # License: GPL v3
 
 RED='\033[0;31m'

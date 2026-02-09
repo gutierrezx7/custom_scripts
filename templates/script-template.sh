@@ -74,6 +74,7 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)  CS_DRY_RUN=true; shift ;;
+        # shellcheck disable=SC2034
         --verbose)  CS_VERBOSE=true; shift ;;
         --help|-h)  show_help ;;
         *)          msg_error "Opção desconhecida: $1"; show_help ;;

@@ -37,6 +37,7 @@ fi
 FRIGATE_VERSION="v0.14.1"
 INSTALL_DIR="/opt/frigate"
 VENV_DIR="${INSTALL_DIR}/venv"
+# shellcheck disable=SC2034
 STD="" # Defina como ">/dev/null" para silenciar ou vazio para debug
 
 msg_info "Iniciando instalação do Frigate NVR (Bare Metal - Bookworm Compatível)"

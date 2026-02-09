@@ -29,7 +29,9 @@ else
 fi
 
 # ── Aliases de cor legados (backward-compatible) ─────────────────────────────
+# shellcheck disable=SC2034
 RED="${CS_RED}"; GREEN="${CS_GREEN}"; YELLOW="${CS_YELLOW}"
+# shellcheck disable=SC2034
 BLUE="${CS_BLUE}"; CYAN="${CS_CYAN}"; NC="${CS_NC}"
 
 # ── Estado global ────────────────────────────────────────────────────────────

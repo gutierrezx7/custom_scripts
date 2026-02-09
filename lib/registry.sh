@@ -11,12 +11,17 @@ declare -a CS_REGISTRY_FILES=()
 declare -A CS_REGISTRY_TITLE=()
 declare -A CS_REGISTRY_DESC=()
 declare -A CS_REGISTRY_SUPPORTED=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_INTERACTIVE=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_REBOOT=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_NETWORK=()
 declare -A CS_REGISTRY_CATEGORY=()
 declare -A CS_REGISTRY_VERSION=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_TAGS=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_DRYRUN=()
 
 CS_REGISTRY_IGNORE_DIRS=("templates" "docs" "tests" "lib" ".git" ".github")
