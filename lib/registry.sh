@@ -46,26 +46,86 @@ declare -A CS_CATEGORY_LABELS=(
 # Formato esperado:  # Key: Value
 _cs_get_meta() {
     local file="$1"
-    local key="$2"
-    head -30 "$file" | grep -i "^# ${key}:" | head -1 | sed "s/^# ${key}:[ \t]*//" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//'
-}
+    # Remote mode: fetch list from GitHub API and parse
+    if [[ "${REMOTE_MODE:-}" == "1" ]]; then
+        msg_debug "Registry em modo remoto — consultando GitHub API..."
+        CS_REGISTRY_FILES=()
 
-# ── Validador de metadados ───────────────────────────────────────────────────
-# Retorna 0 se o script tem pelo menos Title e Description.
-_cs_is_valid_script() {
-    local file="$1"
-    local title
-    title=$(_cs_get_meta "$file" "Title")
-    [[ -n "$title" ]]
-}
+        local api_url="${REMOTE_API_BASE:-https://api.github.com/repos/gutierrezx7/custom_scripts/git/trees/main?recursive=1}"
+        local tmp
+        tmp=$(mktemp)
+        if ! curl -fsS "$api_url" -o "$tmp"; then
+            msg_warn "Falha ao consultar GitHub API; registry remoto não disponível."
+            rm -f "$tmp"
+            return 0
+        fi
 
-# ── Scanner de diretório ────────────────────────────────────────────────────
-# Escaneia um diretório e registra todos os scripts válidos.
-_cs_scan_directory() {
-    local dir="$1"
-    local category
-    category=$(basename "$dir")
+        # Extrair caminhos de .sh do JSON (sem jq)
+        grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' | while IFS= read -r path; do
+            # Ignorar paths em dirs excluídos
+            local skip=false
+            for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
+                if [[ "$path" == "$ignore/*" || "$path" == "$ignore" ]]; then
+                    skip=true; break
+                fi
+            done
+            [[ "$skip" == "true" ]] && continue
 
+            # Ignorar setup.sh
+            if [[ "$(basename "$path")" == "setup.sh" ]]; then continue; fi
+
+            # Ler metadados do raw file
+            local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
+            local header
+            header=$(curl -fsS --max-time 10 "$raw_url" 2>/dev/null | sed -n '1,30p')
+
+            local title desc supported interactive reboot network version tags dryrun category
+            title=$(echo "$header" | grep -i '^# Title:' | sed 's/^# Title:[[:space:]]*//I' | head -1)
+            [[ -z "$title" ]] && continue
+            desc=$(echo "$header" | grep -i '^# Description:' | sed 's/^# Description:[[:space:]]*//I' | head -1)
+            supported=$(echo "$header" | grep -i '^# Supported:' | sed 's/^# Supported:[[:space:]]*//I' | head -1)
+            interactive=$(echo "$header" | grep -i '^# Interactive:' | sed 's/^# Interactive:[[:space:]]*//I' | head -1)
+            reboot=$(echo "$header" | grep -i '^# Reboot:' | sed 's/^# Reboot:[[:space:]]*//I' | head -1)
+            network=$(echo "$header" | grep -i '^# Network:' | sed 's/^# Network:[[:space:]]*//I' | head -1)
+            version=$(echo "$header" | grep -i '^# Version:' | sed 's/^# Version:[[:space:]]*//I' | head -1)
+            tags=$(echo "$header" | grep -i '^# Tags:' | sed 's/^# Tags:[[:space:]]*//I' | head -1)
+            dryrun=$(echo "$header" | grep -i '^# DryRun:' | sed 's/^# DryRun:[[:space:]]*//I' | head -1)
+
+            category=$(dirname "$path")
+
+            # Defaults
+            [[ -z "$supported" ]] && supported="ALL"
+            [[ -z "$interactive" ]] && interactive="no"
+            [[ -z "$reboot" ]] && reboot="no"
+            [[ -z "$network" ]] && network="safe"
+            [[ -z "$version" ]] && version="1.0"
+            [[ -z "$dryrun" ]] && dryrun="no"
+
+            CS_REGISTRY_FILES+=("$path")
+            CS_REGISTRY_TITLE["$path"]="$title"
+            CS_REGISTRY_DESC["$path"]="${desc:-$title}"
+            CS_REGISTRY_SUPPORTED["$path"]="$supported"
+            CS_REGISTRY_INTERACTIVE["$path"]="$interactive"
+            CS_REGISTRY_REBOOT["$path"]="$reboot"
+            CS_REGISTRY_NETWORK["$path"]="$network"
+            CS_REGISTRY_CATEGORY["$path"]="$category"
+            CS_REGISTRY_VERSION["$path"]="$version"
+            CS_REGISTRY_TAGS["$path"]="$tags"
+            CS_REGISTRY_DRYRUN["$path"]="$dryrun"
+        done
+
+        rm -f "$tmp"
+        msg_debug "Registry remoto: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
+        return 0
+    fi
+
+    # Local scan (original behavior)
+    CS_REGISTRY_FILES=()
+
+    # Encontrar todos os diretórios de primeiro nível
+    while IFS= read -r -d '' dir; do
+        local dirname
+        dirname=$(basename "$dir")
     for file in "$dir"/*.sh; do
         [[ -e "$file" ]] || continue
 
@@ -79,6 +139,22 @@ _cs_scan_directory() {
         [[ "$skip" == "true" ]] && continue
 
         # Validar metadados mínimos
+
+# Baixar um script remoto para /tmp e retornar o caminho
+cs_fetch_script_to_temp() {
+    local path="$1"
+    local tmp
+    tmp=$(mktemp /tmp/custom_scripts.XXXXXX.sh)
+    local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
+    if curl -fsS "$raw_url" -o "$tmp"; then
+        chmod +x "$tmp"
+        echo "$tmp"
+        return 0
+    else
+        rm -f "$tmp"
+        return 1
+    fi
+}
         if ! _cs_is_valid_script "$file"; then
             msg_debug "Ignorando $file (metadados incompletos - falta 'Title:')"
             continue

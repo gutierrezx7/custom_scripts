@@ -63,6 +63,27 @@ bootstrap() {
         exit 1
     fi
 
+    # Se estamos executando via pipe (SCRIPT_DIR vazio), não vamos clonar
+    # Fonte as bibliotecas diretamente do repositório (modo remoto)
+    if [[ -z "$SCRIPT_DIR" ]]; then
+        REMOTE_MODE=1
+        REMOTE_RAW_BASE="https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main"
+        REMOTE_API_BASE="https://api.github.com/repos/gutierrezx7/custom_scripts/git/trees/main?recursive=1"
+
+        _bs_step "Modo remoto detectado — carregando bibliotecas diretamente do GitHub..."
+
+        # Carregar libs na ordem: common, state, registry, runner
+        for lib in common state registry runner; do
+            _bs_step "Carregando lib/$lib.sh..."
+            if ! source <(curl -fsSL "${REMOTE_RAW_BASE}/lib/${lib}.sh"); then
+                _bs_error "Falha ao carregar lib/$lib.sh do remoto."
+                exit 1
+            fi
+        done
+
+        return 0
+    fi
+
     # Se o repo já existe em INSTALL_DIR, atualiza e re-executa de lá
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         _bs_step "Atualizando repositório em $INSTALL_DIR..."
@@ -121,14 +142,15 @@ bootstrap() {
 # Executar bootstrap imediatamente (pode exec e nunca retornar)
 bootstrap "$@"
 
-# ── Se chegou aqui, SCRIPT_DIR é válido e lib/ existe ───────────────────────
+# ── Se chegou aqui, se não estivermos em REMOTE_MODE, carregar libs locais ───
 set -u  # Agora é seguro ativar nounset
-
-# ── Carregar bibliotecas ─────────────────────────────────────────────────────
-source "${SCRIPT_DIR}/lib/common.sh"
-source "${SCRIPT_DIR}/lib/state.sh"
-source "${SCRIPT_DIR}/lib/registry.sh"
-source "${SCRIPT_DIR}/lib/runner.sh"
+if [[ "${REMOTE_MODE:-}" != "1" ]]; then
+    # ── Carregar bibliotecas locais ─────────────────────────────────────────
+    source "${SCRIPT_DIR}/lib/common.sh"
+    source "${SCRIPT_DIR}/lib/state.sh"
+    source "${SCRIPT_DIR}/lib/registry.sh"
+    source "${SCRIPT_DIR}/lib/runner.sh"
+fi
 
 # ── Banner ───────────────────────────────────────────────────────────────────
 show_banner() {
@@ -146,7 +168,7 @@ BANNER
     echo -e "  ${CS_DIM}Ambiente:${CS_NC} ${CS_BOLD}${CS_ENV_TYPE}${CS_NC}  │  ${CS_DIM}Distro:${CS_NC} ${CS_BOLD}${CS_DISTRO_PRETTY}${CS_NC}"
 
     if [[ "${CS_DRY_RUN}" == "true" ]]; then
-        echo -e "  ${CS_MAGENTA}${CS_BOLD}⚠ MODO DRY-RUN ATIVO - Nenhuma alteração será feita${CS_NC}"
+        echo -e "  ${CS_MAGENTA}${CS_BOLD}DRY-RUN ATIVO - Nenhuma alteração será feita${CS_NC}"
     fi
     echo ""
 }
@@ -193,9 +215,9 @@ show_menu() {
 
             # Tags visuais
             local tags=""
-            [[ "$interactive" == "yes" ]] && tags+=" ⚙"
-            [[ "$reboot" == "yes" ]]      && tags+=" ↻"
-            [[ "$network" == "risk" ]]    && tags+=" ⚠"
+            [[ "$interactive" == "yes" ]] && tags+=" [I]"
+            [[ "$reboot" == "yes" ]]      && tags+=" [R]"
+            [[ "$network" == "risk" ]]    && tags+=" [!]"
 
             # Categoria label
             local cat_short="${cat}"
@@ -213,14 +235,14 @@ show_menu() {
     # Título dinâmico
     local menu_title="Custom Scripts v${VERSION} [${CS_ENV_TYPE}]"
     if [[ "${CS_DRY_RUN}" == "true" ]]; then
-        menu_title+=" 🔍 DRY-RUN"
+        menu_title+=" DRY-RUN"
     fi
 
     # Mostrar menu
     local choices
     choices=$(whiptail \
         --title "$menu_title" \
-        --checklist "Selecione com ESPAÇO, confirme com ENTER:\n\n⚙ = Interativo  ↻ = Reboot  ⚠ = Risco de Rede" \
+        --checklist "Selecione com ESPAÇO, confirme com ENTER:\n\n[I] = Interativo  [R] = Reboot  [!] = Risco de Rede" \
         "$box_h" "$box_w" "$list_h" \
         "${whip_args[@]}" \
         3>&1 1>&2 2>&3) || return 0
@@ -241,7 +263,7 @@ show_menu() {
     for file in "${selected_files[@]}"; do
         local title="${CS_REGISTRY_TITLE[$file]}"
         local cat="${CS_REGISTRY_CATEGORY[$file]}"
-        echo -e "  ${CS_CYAN}•${CS_NC} ${title} ${CS_DIM}(${cat})${CS_NC}"
+        echo -e "  - ${title} ${CS_DIM}(${cat})${CS_NC}"
     done
     echo ""
 
@@ -420,9 +442,9 @@ run_wizard() {
         while IFS= read -r file; do
             local title="${CS_REGISTRY_TITLE[$file]}"
             local tags=""
-            [[ "${CS_REGISTRY_INTERACTIVE[$file]}" == "yes" ]] && tags+=" ⚙"
-            [[ "${CS_REGISTRY_REBOOT[$file]}" == "yes" ]]      && tags+=" ↻"
-            [[ "${CS_REGISTRY_NETWORK[$file]}" == "risk" ]]    && tags+=" ⚠"
+            [[ "${CS_REGISTRY_INTERACTIVE[$file]}" == "yes" ]] && tags+=" [I]"
+            [[ "${CS_REGISTRY_REBOOT[$file]}" == "yes" ]]      && tags+=" [R]"
+            [[ "${CS_REGISTRY_NETWORK[$file]}" == "risk" ]]    && tags+=" [!]"
 
             local display
             display=$(printf "%-${max_title}s  (%-12s) %s" "${title:0:$max_title}" "$cat" "$tags")
@@ -453,7 +475,7 @@ run_wizard() {
 
     # ── Resumo e confirmação ─────────────────────────────────────────────
     clear
-    msg_header "📋 Resumo do Assistente"
+    msg_header "Resumo do Assistente"
     echo ""
     echo -e "  ${CS_BOLD}Hostname:${CS_NC}  ${current_hostname} → ${CS_CYAN}${new_hostname}${CS_NC}"
 
@@ -470,7 +492,7 @@ run_wizard() {
     if [[ ${#selected_files[@]} -gt 0 ]]; then
         echo -e "  ${CS_BOLD}Scripts (${#selected_files[@]}):${CS_NC}"
         for file in "${selected_files[@]}"; do
-            echo -e "    ${CS_CYAN}•${CS_NC} ${CS_REGISTRY_TITLE[$file]} ${CS_DIM}(${CS_REGISTRY_CATEGORY[$file]})${CS_NC}"
+            echo -e "    - ${CS_REGISTRY_TITLE[$file]} ${CS_DIM}(${CS_REGISTRY_CATEGORY[$file]})${CS_NC}"
         done
     else
         echo -e "  ${CS_BOLD}Scripts:${CS_NC}   ${CS_DIM}(nenhum selecionado)${CS_NC}"
@@ -483,7 +505,7 @@ run_wizard() {
     fi
 
     # ── Aplicar configurações ────────────────────────────────────────────
-    msg_header "⚡ Aplicando Configurações"
+    msg_header "Aplicando Configurações"
 
     # Hostname
     if [[ "$new_hostname" != "$current_hostname" ]]; then
@@ -550,7 +572,7 @@ NETEOF
         # Se precisa reiniciar por causa do IP antes de rodar scripts,
         # salvar scripts como pendentes para resume
         if [[ "$need_reboot_for_wizard" == "true" && "${CS_DRY_RUN}" != "true" ]]; then
-            msg_header "↻ Reboot necessário antes de instalar scripts"
+            msg_header "Reboot necessário antes de instalar scripts"
             msg_info "A mudança de IP será aplicada no próximo boot."
             msg_info "Os ${#selected_files[@]} scripts serão instalados automaticamente após o reboot."
 
@@ -619,13 +641,13 @@ show_main_menu() {
 
     local choice
     choice=$(whiptail \
-        --title "Custom Scripts v${VERSION} [${CS_ENV_TYPE}]" \
-        --menu "Escolha uma opção:\n" \
-        "$box_h" "$box_w" 4 \
-        "1" "🧙 Assistente Inicial (Hostname, IP, Scripts)" \
-        "2" "📦 Selecionar Scripts" \
-        "3" "📋 Listar scripts disponíveis" \
-        "4" "❌ Sair" \
+        --title "$menu_title" \
+        --menu "Escolha uma opção:" \
+        "$box_h" "$box_w" 6 \
+        "1" "Wizard - Assistente inicial (hostname, IP, timezone)" \
+        "2" "Selecionar scripts (menu)" \
+        "3" "Listar scripts disponíveis" \
+        "4" "Sair" \
         3>&1 1>&2 2>&3) || choice="4"
 
     case "$choice" in

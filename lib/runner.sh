@@ -59,32 +59,61 @@ cs_run_script() {
     # Exportar variáveis de ambiente para scripts filhos
     export CS_DRY_RUN CS_VERBOSE CS_ENV_TYPE CS_LOG_FILE
 
-    if bash "$file" "${extra_args[@]}"; then
-        msg_success "$title concluído com sucesso."
-        CS_RUN_SUCCESS+=("$title")
-        cs_state_mark_done "$file" 2>/dev/null || true
+    # Primeiro, se o arquivo existir localmente, executá-lo diretamente
+    if [[ -f "$file" ]]; then
+        if bash "$file" "${extra_args[@]}"; then
+            msg_success "$title concluído com sucesso."
+            CS_RUN_SUCCESS+=("$title")
+            cs_state_mark_done "$file" 2>/dev/null || true
 
-        # Se precisa de reboot e ainda há scripts pendentes, pausar para reboot
-        if [[ "$reboot" == "yes" ]]; then
-            CS_RUN_NEED_REBOOT=true
-            # Verificar se há mais scripts pendentes
-            local pending_count
-            pending_count=$(cs_state_get_pending 2>/dev/null | wc -l || echo 0)
-            if [[ $pending_count -gt 0 ]]; then
-                msg_warn "Reboot necessário. Há mais $pending_count script(s) pendente(s)."
-                msg_info "A execução continuará automaticamente após o reboot."
-                CS_RUN_REBOOT_NOW=true
-                return 0
+            if [[ "$reboot" == "yes" ]]; then
+                CS_RUN_NEED_REBOOT=true
+                local pending_count
+                pending_count=$(cs_state_get_pending 2>/dev/null | wc -l || echo 0)
+                if [[ $pending_count -gt 0 ]]; then
+                    msg_warn "Reboot necessário. Há mais $pending_count script(s) pendente(s)."
+                    msg_info "A execução continuará automaticamente após o reboot."
+                    CS_RUN_REBOOT_NOW=true
+                    return 0
+                fi
             fi
+        else
+            local ret=$?
+            msg_error "$title falhou (Código: $ret). Continuando..."
+            CS_RUN_FAILED+=("$title (Exit: $ret)")
+            cs_state_mark_failed "$file" 2>/dev/null || true
+            sleep 2
         fi
-    else
-        local ret=$?
-        msg_error "$title falhou (Código: $ret). Continuando..."
-        CS_RUN_FAILED+=("$title (Exit: $ret)")
-        cs_state_mark_failed "$file" 2>/dev/null || true
-        sleep 2
+        echo ""
+        return 0
     fi
 
+    # Se não existe localmente, e estamos em modo remoto, tentar baixar e rodar temporariamente
+    if [[ "${REMOTE_MODE:-}" == "1" ]]; then
+        if tmpf=$(cs_fetch_script_to_temp "$file" 2>/dev/null); then
+            if bash "$tmpf" "${extra_args[@]}"; then
+                msg_success "$title concluído com sucesso."
+                CS_RUN_SUCCESS+=("$title")
+                cs_state_mark_done "$file" 2>/dev/null || true
+            else
+                local ret=$?
+                msg_error "$title falhou (Código: $ret). Continuando..."
+                CS_RUN_FAILED+=("$title (Exit: $ret)")
+                cs_state_mark_failed "$file" 2>/dev/null || true
+            fi
+            rm -f "$tmpf"
+            echo ""
+            return 0
+        else
+            msg_warn "Não foi possível baixar o script remoto: $file"
+            cs_state_mark_failed "$file" 2>/dev/null || true
+            return 0
+        fi
+    fi
+
+    # Caso padrão: não encontrou o script
+    msg_warn "Script $file não encontrado localmente. Pulando."
+    cs_state_mark_failed "$file" 2>/dev/null || true
     echo ""
 }
 
