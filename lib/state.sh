@@ -58,7 +58,7 @@ cs_state_save_queue() {
     _cs_state_init
 
     # Limpar estado anterior
-    > "$CS_STATE_FILE"
+    : > "$CS_STATE_FILE"
 
     for file in "${files[@]}"; do
         echo "PENDING|${file}" >> "$CS_STATE_FILE"
@@ -156,7 +156,7 @@ cs_state_print_summary() {
 cs_state_save_wizard() {
     _cs_state_init
     # Aceita pares KEY=VALUE como argumentos
-    > "$CS_STATE_WIZARD"
+    : > "$CS_STATE_WIZARD"
     for kv in "$@"; do
         echo "$kv" >> "$CS_STATE_WIZARD"
     done

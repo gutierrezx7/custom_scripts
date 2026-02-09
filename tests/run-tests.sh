@@ -130,9 +130,9 @@ test_metadata() {
     ((TOTAL+=1))
 
     local title description supported
-    title=$(head -30 "$script" | grep -i "^# Title:" | head -1 | sed 's/^# Title:[ \t]*//')
-    description=$(head -30 "$script" | grep -i "^# Description:" | head -1)
-    supported=$(head -30 "$script" | grep -i "^# Supported:" | head -1)
+    title=$(head -30 "$script" | grep -i "^# Title:" | head -1 | sed 's/^# Title:[ \t]*//' || true)
+    description=$(head -30 "$script" | grep -i "^# Description:" | head -1 || true)
+    supported=$(head -30 "$script" | grep -i "^# Supported:" | head -1 || true)
 
     local errors=()
     [[ -z "$title" ]]       && errors+=("Falta 'Title:'")

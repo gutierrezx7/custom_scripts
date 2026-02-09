@@ -92,6 +92,7 @@ detect_os() {
 detect_proxmox() {
     if [[ -d /etc/pve ]] || [[ -f /usr/bin/pvesh ]]; then
         log_success "Proxmox VE detectado"
+        local PROXMOX_VERSION
         PROXMOX_VERSION=$(pvesh get /version --output-format json 2>/dev/null | grep -oP '"version":\s*"\K[^"]+' || echo "desconhecida")
         log_info "Versão do Proxmox: ${PROXMOX_VERSION}"
         return 0
