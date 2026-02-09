@@ -103,6 +103,13 @@ _cs_scan_directory() {
 cs_registry_scan() {
     local base_dir="${1:-.}"
 
+    if [[ "${REMOTE_MODE:-}" != "1" ]]; then
+        if [[ -z "$base_dir" || ! -d "$base_dir" ]]; then
+            msg_warn "Diretório base inválido para registry: '${base_dir:-<vazio>}'"
+            return 0
+        fi
+    fi
+
     if [[ "${REMOTE_MODE:-}" == "1" ]]; then
         msg_debug "Registry em modo remoto — consultando GitHub API..."
         CS_REGISTRY_FILES=()

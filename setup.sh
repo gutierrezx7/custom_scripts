@@ -187,7 +187,7 @@ show_menu() {
 
     if [[ ${#CS_REGISTRY_FILES[@]} -eq 0 ]]; then
         msg_error "Nenhum script disponível para este ambiente (${CS_ENV_TYPE})."
-        exit 1
+        return 0
     fi
 
     # Calcular dimensões do terminal
