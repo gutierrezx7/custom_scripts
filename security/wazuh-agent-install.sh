@@ -243,7 +243,8 @@ restore_default_config() {
 
     local OSSEC_CONF="/var/ossec/etc/ossec.conf"
     local BACKUP_DIR_LOCAL="/var/backups/wazuh"
-    local BACKUP_FILE="${BACKUP_DIR_LOCAL}/ossec.conf.$(date +%s).bak"
+    local BACKUP_FILE
+    BACKUP_FILE="${BACKUP_DIR_LOCAL}/ossec.conf.$(date +%s).bak"
 
     # Criar backup
     mkdir -p "${BACKUP_DIR_LOCAL}"

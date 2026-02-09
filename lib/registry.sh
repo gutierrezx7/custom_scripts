@@ -176,12 +176,17 @@ cs_registry_scan() {
             CS_REGISTRY_TITLE["$path"]="$title"
             CS_REGISTRY_DESC["$path"]="${desc:-$title}"
             CS_REGISTRY_SUPPORTED["$path"]="$supported"
+            # shellcheck disable=SC2034
             CS_REGISTRY_INTERACTIVE["$path"]="$interactive"
+            # shellcheck disable=SC2034
             CS_REGISTRY_REBOOT["$path"]="$reboot"
+            # shellcheck disable=SC2034
             CS_REGISTRY_NETWORK["$path"]="$network"
             CS_REGISTRY_CATEGORY["$path"]="$category"
             CS_REGISTRY_VERSION["$path"]="$version"
+            # shellcheck disable=SC2034
             CS_REGISTRY_TAGS["$path"]="$tags"
+            # shellcheck disable=SC2034
             CS_REGISTRY_DRYRUN["$path"]="$dryrun"
         done
 
