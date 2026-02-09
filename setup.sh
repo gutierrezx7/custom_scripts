@@ -16,15 +16,83 @@
 # License: GPL v3
 # =============================================================================
 
-set -euo pipefail
+set -eo pipefail
 
 # ── Configurações ────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="/opt/custom_scripts"
 VERSION="2.0.0"
 
+# ── Funções mínimas para fase de bootstrap ───────────────────────────────────
+# Usadas ANTES de lib/common.sh estar disponível (execução remota via wget/curl)
+_bs_info()   { echo -e "\033[0;32m[INFO]\033[0m    $1"; }
+_bs_warn()   { echo -e "\033[1;33m[AVISO]\033[0m   $1"; }
+_bs_error()  { echo -e "\033[0;31m[ERRO]\033[0m    $1" >&2; }
+_bs_header() { echo -e "\n\033[0;34m\033[1m━━━ $1 ━━━\033[0m"; }
+_bs_step()   { echo -e "  \033[0;36m➜\033[0m $1"; }
+
 # ── Resolver diretório do script ─────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# BASH_SOURCE fica vazio quando executado via: bash -c "$(wget -qLO - URL)"
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "bash" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    # Execução remota (wget/curl pipe) — sem arquivo local
+    SCRIPT_DIR=""
+fi
+
+# ── Auto-Bootstrap ───────────────────────────────────────────────────────────
+# Deve rodar ANTES de carregar lib/ (que pode não existir ainda)
+bootstrap() {
+    local forward_args=("$@")
+
+    # Já estamos no diretório de instalação com lib/ disponível? Nada a fazer.
+    if [[ -n "$SCRIPT_DIR" && "$SCRIPT_DIR" == "$INSTALL_DIR" ]]; then
+        return 0
+    fi
+
+    # Estamos num clone local com lib/? (dev mode) Nada a fazer.
+    if [[ -n "$SCRIPT_DIR" && -d "${SCRIPT_DIR}/.git" && -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
+        return 0
+    fi
+
+    # ── Daqui em diante, precisamos clonar/atualizar o repositório ────────
+
+    # Verificar root
+    if [[ "$EUID" -ne 0 ]]; then
+        _bs_error "Por favor, execute como root (sudo)."
+        exit 1
+    fi
+
+    # Se o repo já existe em INSTALL_DIR, atualiza e re-executa de lá
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+        _bs_step "Atualizando repositório em $INSTALL_DIR..."
+        cd "$INSTALL_DIR"
+        git pull --quiet 2>/dev/null || _bs_warn "Falha ao atualizar (usando versão local)."
+        exec bash "$INSTALL_DIR/setup.sh" "${forward_args[@]}"
+    fi
+
+    # Primeira execução: instalar git se necessário e clonar
+    _bs_header "Primeira Execução"
+    if ! command -v git &>/dev/null; then
+        _bs_step "Instalando git..."
+        apt-get update -qq
+        apt-get install -y git -qq
+    fi
+
+    _bs_step "Clonando repositório para $INSTALL_DIR..."
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    chmod +x setup.sh
+
+    _bs_step "Reiniciando a partir do repositório clonado..."
+    exec bash "$INSTALL_DIR/setup.sh" "${forward_args[@]}"
+}
+
+# Executar bootstrap imediatamente (pode exec e nunca retornar)
+bootstrap "$@"
+
+# ── Se chegou aqui, SCRIPT_DIR é válido e lib/ existe ───────────────────────
+set -u  # Agora é seguro ativar nounset
 
 # ── Carregar bibliotecas ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -50,38 +118,6 @@ BANNER
         echo -e "  ${CS_MAGENTA}${CS_BOLD}⚠ MODO DRY-RUN ATIVO - Nenhuma alteração será feita${CS_NC}"
     fi
     echo ""
-}
-
-# ── Auto-Bootstrap ───────────────────────────────────────────────────────────
-bootstrap() {
-    # Se já estamos no diretório de instalação, não precisa clonar
-    if [[ "$SCRIPT_DIR" == "$INSTALL_DIR" ]]; then
-        return 0
-    fi
-
-    # Se o repo já existe em INSTALL_DIR, atualiza
-    if [[ -d "$INSTALL_DIR/.git" ]]; then
-        msg_step "Atualizando repositório em $INSTALL_DIR..."
-        cd "$INSTALL_DIR"
-        git pull --quiet 2>/dev/null || msg_warn "Falha ao atualizar (usando versão local)."
-        exec bash setup.sh "$@"
-    fi
-
-    # Verificar se estamos num clone local (dev mode)
-    if [[ -d "${SCRIPT_DIR}/.git" ]]; then
-        msg_debug "Executando em modo de desenvolvimento local."
-        return 0
-    fi
-
-    # Primeira execução: clonar
-    msg_header "Primeira Execução"
-    check_dependencies git
-
-    msg_step "Clonando repositório para $INSTALL_DIR..."
-    cs_run git clone "$REPO_URL" "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-    chmod +x setup.sh
-    exec bash setup.sh "$@"
 }
 
 # ── Menu com Whiptail ────────────────────────────────────────────────────────
@@ -269,9 +305,6 @@ main() {
     # Detectar ambiente
     detect_env
     detect_distro
-
-    # Bootstrap (clonar se necessário)
-    bootstrap "$@"
 
     # Executar ação
     case "$action" in
