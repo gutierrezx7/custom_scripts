@@ -1,12 +1,12 @@
 #!/bin/bash
 
-################################################################################
-#                                                                              #
-#        WAZUH AGENT 4.14.1 - PROXMOX VE 9.1 DEPLOYMENT                      #
-#        Version: 4.0 - FINAL FIX: Merge syscheck + Proper XML nesting       #
-#        ERROR: "Invalid element 'syscheck'" = Duplicate syscheck resolved    #
-#                                                                              #
-################################################################################
+# Title: Instalar Wazuh Agent
+# Description: Instalação e configuração do Wazuh Agent para Proxmox VE
+# Supported: VM, LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
+# License: GPL v3
 
 set -euo pipefail
 
@@ -92,6 +92,8 @@ detect_os() {
 detect_proxmox() {
     if [[ -d /etc/pve ]] || [[ -f /usr/bin/pvesh ]]; then
         log_success "Proxmox VE detectado"
+        local PROXMOX_VERSION
+        # shellcheck disable=SC2155
         PROXMOX_VERSION=$(pvesh get /version --output-format json 2>/dev/null | grep -oP '"version":\s*"\K[^"]+' || echo "desconhecida")
         log_info "Versão do Proxmox: ${PROXMOX_VERSION}"
         return 0

@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-# N8N Installer (NPM Method) for Proxmox LXC (Debian/Ubuntu)
-# Part of Custom Scripts
+# Title: Instalar N8N (NPM)
+# Description: Instala o N8N via NPM para automação de workflow
+# Supported: LXC
+# Interactive: no
+# Reboot: no
+# Network: safe
 # License: GPL v3
 
 RED='\033[0;31m'

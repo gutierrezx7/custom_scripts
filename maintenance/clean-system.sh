@@ -1,16 +1,12 @@
 #!/bin/bash
 
-#############################################################
-# Nome do Script: clean-system.sh
-# Descrição: Limpeza completa do sistema Linux
-# Autor: Custom Scripts Team
-# Data: 22/12/2024
-# Versão: 1.0
-# Licença: GPL-3.0
-#############################################################
+# Title: Limpeza do Sistema
+# Description: Limpeza completa do sistema Linux
+# Supported: ALL
 # Interactive: no
 # Reboot: no
 # Network: safe
+# License: GPL v3
 
 set -e
 set -u

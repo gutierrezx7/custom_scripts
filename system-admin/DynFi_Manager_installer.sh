@@ -650,6 +650,10 @@ while getopts 'd:u' option; do
 				exit
 			fi
 			;;
+		* )
+			echo "Opção inválida."
+			exit 1
+			;;
 	esac
 done
 

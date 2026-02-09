@@ -37,6 +37,7 @@ fi
 FRIGATE_VERSION="v0.14.1"
 INSTALL_DIR="/opt/frigate"
 VENV_DIR="${INSTALL_DIR}/venv"
+# shellcheck disable=SC2034
 STD="" # Defina como ">/dev/null" para silenciar ou vazio para debug
 
 msg_info "Iniciando instalação do Frigate NVR (Bare Metal - Bookworm Compatível)"
@@ -84,7 +85,7 @@ msg_ok "Go2RTC instalado."
 
 # 5. Baixar e Preparar Frigate
 msg_info "Baixando código fonte do Frigate (${FRIGATE_VERSION})..."
-cd ~
+cd ~ || exit 1
 rm -rf frigate.tar.gz
 curl -fsSL "https://github.com/blakeblackshear/frigate/archive/refs/tags/${FRIGATE_VERSION}.tar.gz" -o "frigate.tar.gz"
 mkdir -p "${INSTALL_DIR}"
@@ -105,7 +106,7 @@ msg_ok "Ambiente Virtual configurado em ${VENV_DIR}."
 
 # 7. Build do Frigate e Dependências Python
 msg_info "Compilando dependências do Frigate (Isso pode demorar)..."
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}" || exit 1
 
 # Patching: Evitar que scripts internos tentem instalar libtbb2 ou usar pip global
 # Vamos assumir o controle das dependências aqui, ignorando o install_deps.sh do repo se ele for problemático.
@@ -133,8 +134,8 @@ export TARGETARCH="amd64"
 # Para Debian 12, ffmpeg do repo é decente (5.1.x).
 # O script original tenta linkar /usr/lib/btbn-ffmpeg. Se não existir, linkamos o do sistema.
 if [ ! -d "/usr/lib/btbn-ffmpeg" ]; then
-    ln -svf $(which ffmpeg) /usr/local/bin/ffmpeg
-    ln -svf $(which ffprobe) /usr/local/bin/ffprobe
+    ln -svf "$(which ffmpeg)" /usr/local/bin/ffmpeg
+    ln -svf "$(which ffprobe)" /usr/local/bin/ffprobe
 fi
 
 # Instalar Dependências Python Finais
@@ -149,7 +150,7 @@ make version
 
 # 8. Build da Interface Web
 msg_info "Compilando Interface Web (Requer CPU/RAM)..."
-cd "${INSTALL_DIR}/web"
+cd "${INSTALL_DIR}/web" || exit 1
 npm install
 npm run build
 
@@ -158,7 +159,7 @@ cp -r dist/* .
 
 # 9. Configuração Final
 msg_info "Configurando arquivos e serviços..."
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}" || exit 1
 mkdir -p /config
 cp -r config/. /config
 

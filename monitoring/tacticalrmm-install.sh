@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
-# TacticalRMM Installer for Proxmox LXC (Debian/Ubuntu)
-# Part of Custom Scripts
+# Title: Instalar TacticalRMM
+# Description: Wrapper para instalação do TacticalRMM em LXC (bypass de detecção)
+# Supported: LXC
+# Interactive: yes
+# Reboot: no
+# Network: safe
 # License: GPL v3
+
 # This script wraps the official TacticalRMM installer and patches it to bypass LXC detection.
 
 RED='\033[0;31m'
