@@ -639,6 +639,13 @@ show_main_menu() {
     local box_h=14; [[ $term_h -gt 20 ]] && box_h=16
     local box_w=$((term_w - 10)); [[ $box_w -lt 60 ]] && box_w=60; [[ $box_w -gt 80 ]] && box_w=80
 
+    # Garantir título do menu mesmo que não tenha sido inicializado globalmente
+    local menu_title
+    menu_title="Custom Scripts v${VERSION} [${CS_ENV_TYPE}]"
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        menu_title+=" DRY-RUN"
+    fi
+
     local choice
     choice=$(whiptail \
         --title "$menu_title" \
