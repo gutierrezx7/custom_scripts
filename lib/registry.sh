@@ -114,16 +114,24 @@ cs_registry_scan() {
         msg_debug "Registry em modo remoto — consultando GitHub API..."
         CS_REGISTRY_FILES=()
 
+        if ! check_command curl; then
+            msg_warn "curl não encontrado; registry remoto indisponível."
+            return 0
+        fi
+
         local api_url="${REMOTE_API_BASE:-https://api.github.com/repos/gutierrezx7/custom_scripts/git/trees/main?recursive=1}"
         local tmp
-        tmp=$(mktemp)
+        if ! tmp=$(mktemp 2>/dev/null); then
+            msg_warn "Falha ao criar arquivo temporário; registry remoto indisponível."
+            return 0
+        fi
         if ! curl -fsS "$api_url" -o "$tmp"; then
             msg_warn "Falha ao consultar GitHub API; registry remoto não disponível."
             rm -f "$tmp"
             return 0
         fi
 
-        grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' | while IFS= read -r path; do
+        grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' || true | while IFS= read -r path; do
             local skip=false
             for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
                 if [[ "$path" == "$ignore/*" || "$path" == "$ignore" ]]; then
@@ -136,7 +144,7 @@ cs_registry_scan() {
 
             local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
             local header
-            header=$(curl -fsS --max-time 10 "$raw_url" 2>/dev/null | sed -n '1,30p')
+            header=$( (curl -fsS --max-time 10 "$raw_url" 2>/dev/null | sed -n '1,30p') || true )
 
             local title desc supported interactive reboot network version tags dryrun category
             title=$(echo "$header" | grep -i '^# Title:' | sed 's/^# Title:[[:space:]]*//I' | head -1)
