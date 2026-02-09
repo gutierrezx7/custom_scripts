@@ -1,0 +1,42 @@
+name: CI - Lint & Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+          scandir: '.'
+          additional_files: 'setup.sh'
+
+  metadata:
+    name: Validate Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script metadata
+        run: bash tests/run-tests.sh --metadata
+
+  dry-run:
+    name: Dry-Run Tests (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    needs: [shellcheck, metadata]
+    strategy:
+      matrix:
+        distro: [ubuntu, debian]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test image
+        run: docker build -t cs-test-${{ matrix.distro }} -f tests/Dockerfile.${{ matrix.distro }} .
+      - name: Run dry-run tests
+        run: bash tests/run-tests.sh --dry-run-only --distro ${{ matrix.distro }}

@@ -1,0 +1,24 @@
+FROM debian:12-slim
+
+LABEL maintainer="Custom Scripts Test"
+LABEL description="Imagem de teste para Custom Scripts (Debian)"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CS_DRY_RUN=false
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        bash \
+        curl \
+        wget \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        systemd \
+        sudo \
+        iproute2 \
+        iputils-ping \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/custom_scripts

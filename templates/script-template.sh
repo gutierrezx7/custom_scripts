@@ -1,174 +1,176 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# =============================================================================
+# ── METADADOS (obrigatórios para auto-discovery) ────────────────────────────
+# Title:       Nome Amigável do Script
+# Description: Breve descrição do que o script faz (uma linha)
+# Supported:   ALL                  # ALL | VM | LXC | VM, LXC
+# Interactive:  no                  # yes | no - precisa de input do usuário?
+# Reboot:      no                  # yes | no - requer reboot após execução?
+# Network:     safe                # safe | risk - altera config de rede?
+# DryRun:      yes                 # yes | no - suporta --dry-run nativo?
+# Version:     1.0
+# Tags:        exemplo, template   # Tags para busca (separadas por vírgula)
+# Author:      Seu Nome
+# =============================================================================
+#
+# Descrição detalhada:
+#   Este é o template padrão para novos scripts do projeto Custom Scripts.
+#   Todos os novos scripts DEVEM seguir este formato para serem detectados
+#   automaticamente pelo menu principal (setup.sh).
+#
+# Uso:
+#   bash script-template.sh [--dry-run] [--verbose] [--help]
+#
+# =============================================================================
 
-#############################################################
-# Nome do Script: script-template.sh
-# Descrição: Template básico para scripts shell
-# Autor: Seu Nome
-# Data: $(date +%d/%m/%Y)
-# Versão: 1.0
-# Licença: GPL-3.0
-#############################################################
+set -euo pipefail
 
-# Configurações de segurança
-set -e  # Sair em caso de erro
-set -u  # Tratar variáveis não definidas como erro
-set -o pipefail  # Falhar em pipes
-
-# Cores para output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m' # No Color
-
-# Variáveis globais
-SCRIPT_NAME=$(basename "$0")
+# ── Carregar biblioteca compartilhada (se disponível) ────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="/var/log/${SCRIPT_NAME%.sh}.log"
+LIB_FILE="${SCRIPT_DIR}/../lib/common.sh"
 
-#############################################################
-# Funções auxiliares
-#############################################################
+if [[ -f "$LIB_FILE" ]]; then
+    # shellcheck source=../lib/common.sh
+    source "$LIB_FILE"
+else
+    # Fallback: funções mínimas para execução standalone
+    CS_DRY_RUN="${CS_DRY_RUN:-false}"
+    RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'; MAGENTA='\033[0;35m'; NC='\033[0m'
+    msg_info()    { echo -e "${GREEN}[INFO]${NC}    $1"; }
+    msg_warn()    { echo -e "${YELLOW}[AVISO]${NC}   $1"; }
+    msg_error()   { echo -e "${RED}[ERRO]${NC}    $1" >&2; }
+    msg_header()  { echo -e "\n${BLUE}━━━ $1 ━━━${NC}"; }
+    msg_step()    { echo -e "  ➜ $1"; }
+    msg_dry_run() { echo -e "${MAGENTA}[DRY-RUN]${NC} $1"; }
+    cs_run() {
+        if [[ "${CS_DRY_RUN}" == "true" ]]; then
+            msg_dry_run "$ $*"; return 0
+        fi
+        "$@"
+    }
+    check_root() {
+        [[ $EUID -ne 0 ]] && { msg_error "Execute como root."; exit 1; }
+    }
+fi
 
-# Mensagem de informação
-msg_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-# Mensagem de erro
-msg_error() {
-    echo -e "${RED}[ERRO]${NC} $1" >&2
-}
-
-# Mensagem de aviso
-msg_warning() {
-    echo -e "${YELLOW}[AVISO]${NC} $1"
-}
-
-# Mensagem de debug
-msg_debug() {
-    if [[ "${DEBUG:-0}" == "1" ]]; then
-        echo -e "${BLUE}[DEBUG]${NC} $1"
-    fi
-}
-
-# Função de ajuda
+# ── Parse de argumentos ─────────────────────────────────────────────────────
 show_help() {
-    cat << EOF
-Uso: $SCRIPT_NAME [opções]
-
-Descrição:
-    Template básico para scripts shell
+    cat << 'EOF'
+Uso: script-template.sh [opções]
 
 Opções:
-    -h, --help          Mostra esta mensagem de ajuda
-    -v, --verbose       Modo verbose
-    -d, --debug         Modo debug
-    -V, --version       Mostra a versão
+  --dry-run     Simular execução sem fazer alterações
+  --verbose     Modo detalhado
+  --help, -h    Mostrar esta ajuda
 
 Exemplos:
-    $SCRIPT_NAME --help
-    $SCRIPT_NAME --verbose
-
+  sudo bash script-template.sh
+  sudo bash script-template.sh --dry-run
 EOF
     exit 0
 }
 
-# Verificar se está rodando como root
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        msg_error "Este script precisa ser executado como root"
-        exit 1
-    fi
-}
-
-# Verificar se comandos necessários estão instalados
-check_dependencies() {
-    local deps=("curl" "wget")
-    local missing=()
-    
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            missing+=("$dep")
-        fi
-    done
-    
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        msg_error "Dependências não encontradas: ${missing[*]}"
-        msg_info "Instale com: sudo apt-get install ${missing[*]}"
-        exit 1
-    fi
-}
-
-# Verificar conectividade com internet
-check_internet() {
-    if ! ping -c 1 8.8.8.8 &> /dev/null; then
-        msg_error "Sem conexão com a internet"
-        exit 1
-    fi
-}
-
-# Cleanup ao sair
-cleanup() {
-    msg_debug "Executando limpeza..."
-    # Adicione comandos de limpeza aqui
-}
-
-# Trap para executar cleanup
-trap cleanup EXIT INT TERM
-
-#############################################################
-# Função principal
-#############################################################
-
-main() {
-    msg_info "Iniciando $SCRIPT_NAME..."
-    
-    # Verificações iniciais
-    # check_root
-    # check_dependencies
-    # check_internet
-    
-    # Seu código aqui
-    msg_info "Executando lógica principal..."
-    
-    # Exemplo de processamento
-    # ...
-    
-    msg_info "Script concluído com sucesso!"
-}
-
-#############################################################
-# Processamento de argumentos
-#############################################################
-
-# Processar argumentos
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            show_help
-            ;;
-        -v|--verbose)
-            set -x
-            shift
-            ;;
-        -d|--debug)
-            DEBUG=1
-            shift
-            ;;
-        -V|--version)
-            echo "$SCRIPT_NAME versão 1.0"
-            exit 0
-            ;;
-        *)
-            msg_error "Opção desconhecida: $1"
-            show_help
-            ;;
+    case "$1" in
+        --dry-run)  CS_DRY_RUN=true; shift ;;
+        --verbose)  CS_VERBOSE=true; shift ;;
+        --help|-h)  show_help ;;
+        *)          msg_error "Opção desconhecida: $1"; show_help ;;
     esac
 done
 
-#############################################################
-# Executar script
-#############################################################
+# ── Constantes do script ────────────────────────────────────────────────────
+readonly APP_NAME="nome-do-app"
+readonly APP_VERSION="1.0"
 
-main "$@"
+# ── Verificações ─────────────────────────────────────────────────────────────
+preflight() {
+    msg_header "Verificações Iniciais"
+
+    check_root
+    msg_step "Verificando dependências..."
+
+    # Exemplo: verificar comandos necessários
+    local deps=(curl wget)
+    local missing=()
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &>/dev/null; then
+            missing+=("$dep")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        msg_warn "Instalando dependências: ${missing[*]}"
+        cs_run apt-get update -qq
+        cs_run apt-get install -y "${missing[@]}"
+    fi
+
+    msg_step "Verificações concluídas."
+}
+
+# ── Instalação / Lógica principal ────────────────────────────────────────────
+install() {
+    msg_header "Instalando ${APP_NAME} v${APP_VERSION}"
+
+    # Exemplo de comandos com dry-run:
+    msg_step "Adicionando repositório..."
+    cs_run apt-get update -qq
+
+    msg_step "Instalando pacotes..."
+    cs_run apt-get install -y "${APP_NAME}"
+
+    # Exemplo de configuração:
+    msg_step "Configurando ${APP_NAME}..."
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        msg_dry_run "Criaria arquivo /etc/${APP_NAME}/config"
+    else
+        # Criar configuração real aqui
+        :
+    fi
+}
+
+# ── Pós-instalação ──────────────────────────────────────────────────────────
+post_install() {
+    msg_header "Pós-instalação"
+
+    msg_step "Habilitando serviço..."
+    cs_run systemctl enable "${APP_NAME}" 2>/dev/null || true
+    cs_run systemctl start "${APP_NAME}" 2>/dev/null || true
+
+    msg_step "Verificando status..."
+    if [[ "${CS_DRY_RUN}" != "true" ]]; then
+        if systemctl is-active --quiet "${APP_NAME}" 2>/dev/null; then
+            msg_info "${APP_NAME} está rodando! ✔"
+        else
+            msg_warn "${APP_NAME} instalado, mas serviço não está ativo."
+        fi
+    fi
+}
+
+# ── Cleanup ──────────────────────────────────────────────────────────────────
+cleanup() {
+    msg_step "Limpando arquivos temporários..."
+    # Adicionar limpeza aqui
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+main() {
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        msg_header "🔍 MODO DRY-RUN - Simulação de: ${APP_NAME}"
+    fi
+
+    preflight
+    install
+    post_install
+    cleanup
+
+    echo ""
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        msg_info "Simulação concluída. Nenhuma alteração foi feita."
+    else
+        msg_info "${APP_NAME} instalado com sucesso! 🎉"
+    fi
+}
+
+main

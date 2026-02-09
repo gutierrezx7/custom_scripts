@@ -5,90 +5,261 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/gutierrezx7/custom_scripts/blob/main/CONTRIBUTING.md)
 [![GitHub Stars](https://img.shields.io/github/stars/gutierrezx7/custom_scripts?style=social)](https://github.com/gutierrezx7/custom_scripts/stargazers)
+[![ShellCheck](https://img.shields.io/badge/ShellCheck-passing-brightgreen)](https://www.shellcheck.net/)
+
+**Uma coleção de scripts Linux com auto-discovery, dry-run e menu interativo.**
 
 </div>
 
-Uma coleção atualizada de scripts Linux para DevOps, SysAdmins e entusiastas de HomeLab. Este repositório foca em ferramentas modernas e essenciais para 2025.
+---
 
-## 🚀 Instalação Recomendada (Global)
+## ✨ Destaques da v2.0
 
-Para garantir a melhor experiência, use o **Menu Interativo**. Ele detecta automaticamente seu ambiente (VM, LXC, Bare Metal), baixa os módulos necessários e evita erros de compatibilidade.
+| Feature | Descrição |
+|---------|-----------|
+| 🔍 **Auto-Discovery** | Novos scripts são detectados automaticamente. Basta colocar na pasta. |
+| 🧪 **Dry-Run** | Teste qualquer script com `--dry-run` sem instalar nada. |
+| 📚 **Biblioteca Compartilhada** | Funções comuns em `lib/` — sem código duplicado. |
+| 🐳 **Testes em Docker** | Rode testes seguros em containers sem afetar o host. |
+| 🤖 **Guia para IA** | Instruções para que IAs gerem scripts 100% compatíveis. |
+| 🔌 **Plug & Play** | Adicione scripts sem editar `setup.sh` ou qualquer outro arquivo. |
 
-**Basta rodar este comando:**
+---
+
+## 🚀 Instalação (One-liner)
 
 ```bash
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/setup.sh)"
 ```
 
-*O script cuidará de tudo para você.*
+O script detecta seu ambiente (VM, LXC, Bare Metal), baixa tudo e abre o menu interativo.
 
 ---
 
-## 📂 O que está incluído?
+## 📖 Modos de Uso
 
-O menu principal (`setup.sh`) dá acesso a todas as ferramentas abaixo, organizadas por categoria:
+### Menu Interativo (recomendado)
+```bash
+sudo bash setup.sh
+```
 
-### 🛡️ Segurança
-- **Fail2Ban**: Proteção essencial contra força bruta (SSH).
-- **Firewall (UFW)**: Configuração rápida e segura de portas.
-- **Wazuh Agent**: Monitoramento de segurança avançado.
+### Dry-Run — Testar sem instalar
+```bash
+sudo bash setup.sh --dry-run
+```
 
-### 🌐 Redes
-- **Tailscale**: VPN Mesh zero-config para acesso remoto seguro.
-- **AdGuard Home**: DNS Server com bloqueio de anúncios e rastreadores.
-- **IP Estático (Netplan)**: Utilitário para configurar IP fixo em VMs Ubuntu.
+### Listar scripts disponíveis
+```bash
+sudo bash setup.sh --list
+```
 
-### 🐳 Docker & DevOps
-- **Docker Engine**: Instalação oficial e atualizada.
-- **Nginx Proxy Manager**: O jeito mais fácil de gerenciar Proxy Reverso e SSL.
-- **Portainer**: Interface gráfica para gerenciar seus containers.
-- **Watchtower**: Mantém seus containers atualizados automaticamente.
+### Executar script específico
+```bash
+sudo bash setup.sh --run docker-install
+sudo bash setup.sh --dry-run --run tailscale
+```
 
-### 🔧 Sistema & Utilitários
-- **Shell Moderno**: Instala Zsh, Oh-My-Zsh e Fastfetch para um terminal produtivo.
-- **System Prep**: Define Hostname, atualiza pacotes e instala ferramentas básicas.
-- **Webmin**: Administração de sistema via web.
-- **DynFi Manager**: Gerenciamento centralizado de firewalls.
+### Script individual (avançado)
+```bash
+sudo bash docker/docker-install.sh --dry-run
+sudo bash network/tailscale-install.sh
+```
 
 ---
 
-## ⚡ Exemplos de Uso Direto (Avançado)
-
-Embora recomendemos fortemente o uso do `setup.sh`, você pode executar scripts individuais se souber o que está fazendo.
-
-| Script | Descrição | Link Direto (Exemplo) |
-| :--- | :--- | :--- |
-| **Docker** | Instalação do Docker | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/docker-install.sh)"` |
-| **NPM** | Nginx Proxy Manager | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/docker/npm-install.sh)"` |
-| **Tailscale** | Instalar VPN | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/network/tailscale-install.sh)"` |
-| **Zsh** | Shell Moderno | `bash -c "$(wget -qLO - https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main/system-admin/modern-shell.sh)"` |
-
-## 📁 Estrutura do Repositório
+## 📂 Estrutura do Projeto
 
 ```
 custom_scripts/
-├── setup.sh               # 🌟 MENU PRINCIPAL (Execute este!)
-├── system-admin/          # Scripts de sistema (Zsh, Prep, Webmin...)
-├── docker/                # Scripts Docker (NPM, Watchtower, Portainer...)
-├── network/               # Scripts de Rede (Tailscale, AdGuard, IP...)
-├── security/              # Scripts de Segurança (Fail2Ban, UFW...)
-├── monitoring/            # Ferramentas de Monitoramento
-├── maintenance/           # Scripts de Manutenção
-├── backup/                # Scripts de Backup
-└── README.md              # Documentação
+├── setup.sh               # 🌟 MENU PRINCIPAL
+├── lib/                   # 📚 Biblioteca compartilhada
+│   ├── common.sh          #    Funções utilitárias (cores, msg, cs_run)
+│   ├── registry.sh        #    Auto-discovery de scripts
+│   └── runner.sh          #    Motor de execução + dry-run
+├── templates/
+│   └── script-template.sh # 📝 Template para novos scripts
+├── docs/
+│   └── AI-PROMPT.md       # 🤖 Instruções para IAs
+├── tests/                 # 🧪 Framework de testes
+│   ├── run-tests.sh       #    Test runner
+│   ├── Dockerfile.ubuntu  #    Container Ubuntu
+│   └── Dockerfile.debian  #    Container Debian
+├── system-admin/          # 🔧 Sistema & Utilitários
+├── docker/                # 🐳 Docker & DevOps
+├── network/               # 🌐 Redes
+├── security/              # 🛡️ Segurança
+├── monitoring/            # 📊 Monitoramento
+├── maintenance/           # 🧹 Manutenção
+├── backup/                # 💾 Backup
+└── automation/            # ⚙️ Automação
 ```
+
+---
+
+## 📦 Scripts Incluídos
+
+### 🛡️ Segurança
+| Script | Descrição | Ambiente |
+|--------|-----------|----------|
+| `fail2ban-install.sh` | Proteção contra força bruta (SSH) | ALL |
+| `setup-firewall.sh` | Configuração rápida do UFW | ALL |
+| `wazuh-agent-install.sh` | Monitoramento de segurança SIEM | VM |
+
+### 🌐 Redes
+| Script | Descrição | Ambiente |
+|--------|-----------|----------|
+| `tailscale-install.sh` | VPN Mesh zero-config | ALL |
+| `adguard-install.sh` | DNS Server com bloqueio de ads | ALL |
+| `set-static-ip.sh` | Configurar IP fixo (Netplan) | VM |
+
+### 🐳 Docker & DevOps
+| Script | Descrição | Ambiente |
+|--------|-----------|----------|
+| `docker-install.sh` | Docker Engine + Compose | VM, LXC |
+| `npm-install.sh` | Nginx Proxy Manager | VM, LXC |
+| `watchtower-install.sh` | Atualização automática de containers | ALL |
+| `portainer-install.sh` | Interface gráfica para Docker | ALL |
+
+### 🔧 Sistema & Utilitários
+| Script | Descrição | Ambiente |
+|--------|-----------|----------|
+| `modern-shell.sh` | Zsh + Oh-My-Zsh + Fastfetch | ALL |
+| `system-prep.sh` | Hostname, pacotes, ferramentas básicas | ALL |
+| `webmin-install.sh` | Administração web do sistema | VM |
+| `update-system.sh` | Atualização completa do sistema | ALL |
+
+> 💡 Use `bash setup.sh --list` para ver a lista completa e atualizada.
+
+---
+
+## 🔌 Adicionando Novos Scripts (Plug & Play)
+
+### Passo 1: Criar o arquivo
+
+Copie o template:
+```bash
+cp templates/script-template.sh docker/meu-novo-script.sh
+```
+
+### Passo 2: Editar os metadados
+
+As primeiras linhas **devem** conter:
+```bash
+#!/usr/bin/env bash
+# Title:       Meu Novo Script
+# Description: Instala algo incrível
+# Supported:   ALL
+# Interactive:  no
+# Reboot:      no
+# Network:     safe
+# DryRun:      yes
+# Version:     1.0
+# Tags:        exemplo
+# Author:      Seu Nome
+```
+
+### Passo 3: Pronto!
+
+O menu principal detecta automaticamente. Não precisa editar mais nada.
+
+### Usando IA para criar scripts
+
+Consulte o [Guia para IA](docs/AI-PROMPT.md) — contém instruções completas para que
+ChatGPT, Copilot, Claude ou qualquer IA gere scripts 100% compatíveis.
+
+---
+
+## 🧪 Testando Scripts
+
+### Sem Docker (rápido)
+```bash
+# Dry-run — simula sem instalar
+sudo bash docker/meu-script.sh --dry-run
+
+# Validar metadados
+bash tests/run-tests.sh --metadata
+
+# Lint com ShellCheck
+bash tests/run-tests.sh --lint
+```
+
+### Com Docker (seguro)
+```bash
+# Dry-run em container Ubuntu
+bash tests/run-tests.sh --dry-run-only --distro ubuntu
+
+# Todos os testes
+bash tests/run-tests.sh
+
+# Testar script específico
+bash tests/run-tests.sh --script docker/meu-script.sh
+```
+
+---
+
+## 🏗️ Arquitetura
+
+```
+                    ┌──────────────┐
+                    │   setup.sh   │  ← Ponto de entrada
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐
+        │ common.sh  │ │ reg.  │ │ runner.sh │
+        │            │ │ .sh   │ │           │
+        │ • Cores    │ │ • Scan│ │ • Batch   │
+        │ • msg_*    │ │ • Meta│ │ • DryRun  │
+        │ • cs_run() │ │ • Filt│ │ • Report  │
+        │ • Checks   │ │ • List│ │ • Logging │
+        └────────────┘ └───────┘ └───────────┘
+              │
+    ┌─────────┼──────────┐
+    │         │          │
+  ┌─┴──┐  ┌──┴──┐  ┌───┴───┐
+  │ 📁 │  │ 📁  │  │  📁   │   ← Pastas auto-escaneadas
+  │dock│  │netw │  │secur  │
+  │er/ │  │ork/ │  │ity/   │
+  └────┘  └─────┘  └───────┘
+```
+
+### Como funciona o Auto-Discovery
+
+1. `registry.sh` escaneia **todas** as pastas de primeiro nível
+2. Ignora `lib/`, `templates/`, `docs/`, `tests/`
+3. Para cada `.sh`, lê as primeiras 30 linhas buscando metadados
+4. Scripts com `Title:` válido são registrados automaticamente
+5. Filtra por ambiente (VM, LXC) antes de exibir no menu
+
+### Como funciona o Dry-Run
+
+1. `cs_run()` — wrapper que intercepta comandos do sistema
+2. Em modo `--dry-run`, os comandos são **exibidos** mas **não executados**
+3. Scripts que suportam `DryRun: yes` recebem a flag `--dry-run`
+4. Scripts que não suportam têm seus comandos listados em modo preview
+
+---
 
 ## 🤝 Contribuindo
 
-Contribuições são bem-vindas! Se você criar um novo script:
-1. Adicione-o na pasta correta.
-2. Inclua o cabeçalho de metadados padrão (`# Title`, `# Description`, `# Supported`).
-3. O `setup.sh` detectará seu script automaticamente!
+1. Fork o repositório
+2. Crie seu script seguindo o [template](templates/script-template.sh)
+3. Coloque na pasta da categoria correta
+4. Teste: `bash tests/run-tests.sh --script seu-script.sh`
+5. Abra um Pull Request
 
-## ⚠️ Segurança e Isenção de Responsabilidade
+Veja o [Guia de Contribuição](CONTRIBUTING.md) para detalhes completos.
 
-Sempre revise o código antes de executar scripts com privilégios de root. Estes scripts são fornecidos "como estão", sem garantias. Teste em ambiente seguro antes de usar em produção.
+---
+
+## ⚠️ Segurança
+
+- Sempre revise o código antes de executar com root
+- Use `--dry-run` para verificar o que será feito
+- Teste em ambiente seguro antes de produção
+- Scripts são fornecidos "como estão", sem garantias
 
 ## 📜 Licença
 
-GPL v3 - Veja o arquivo [LICENSE](LICENSE) para detalhes.
+GPL v3 — Veja [LICENSE](LICENSE) para detalhes.

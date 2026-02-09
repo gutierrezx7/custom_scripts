@@ -1,0 +1,8 @@
+# ShellCheck configuration for Custom Scripts
+# https://www.shellcheck.net/wiki/
+
+# Allow sourcing files from lib/ that shellcheck can't resolve at parse time
+external-sources=true
+
+# Ignore "can't follow non-constant source" (lib loading with fallback)
+disable=SC1090,SC1091

@@ -1,354 +1,306 @@
 #!/usr/bin/env bash
-
-# Custom Scripts - Master Installer
+# =============================================================================
+# Custom Scripts - Master Installer (setup.sh) v2.0
+#
+# Menu principal interativo com auto-discovery de scripts.
+# Detecta ambiente, escaneia pastas, filtra por compatibilidade e executa.
+#
+# Uso:
+#   bash setup.sh                  # Menu interativo
+#   bash setup.sh --list           # Listar scripts disponíveis
+#   bash setup.sh --dry-run        # Menu com simulação (nada é instalado)
+#   bash setup.sh --run <script>   # Executar script específico
+#   bash setup.sh --help           # Ajuda
+#
 # GitHub: https://github.com/gutierrezx7/custom_scripts
 # License: GPL v3
+# =============================================================================
 
-# Configurações
+set -euo pipefail
+
+# ── Configurações ────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="/opt/custom_scripts"
-SCRIPT_NAME="setup.sh"
-SUMMARY_LOG="/var/log/custom_scripts_summary.log"
+VERSION="2.0.0"
 
-# Cores
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# ── Resolver diretório do script ─────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Variáveis Globais de Estado
-declare -A SCRIPT_MAP
-declare -a ORDERED_SCRIPTS
-NEED_REBOOT=false
-declare -a FAILED_SCRIPTS
-declare -a SUCCESS_SCRIPTS
+# ── Carregar bibliotecas ─────────────────────────────────────────────────────
+source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/registry.sh"
+source "${SCRIPT_DIR}/lib/runner.sh"
 
-msg_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-msg_warn() { echo -e "${YELLOW}[AVISO]${NC} $1"; }
-msg_error() { echo -e "${RED}[ERRO]${NC} $1"; }
-msg_header() { echo -e "\n${BLUE}=== $1 ===${NC}"; }
-
-# Detectar Virtualização
-detect_env() {
-    if command -v systemd-detect-virt >/dev/null; then
-        VIRT=$(systemd-detect-virt)
-        if [ "$VIRT" == "lxc" ]; then
-            ENV_TYPE="LXC"
-        elif [ "$VIRT" == "none" ]; then
-            ENV_TYPE="Bare-Metal" # Tratar como VM
-        else
-            ENV_TYPE="VM"
-        fi
-    else
-        ENV_TYPE="Desconhecido"
-    fi
-}
-
-# Auto-Bootstrap (Clona o repo se não estiver rodando localmente)
-bootstrap() {
-    if [[ "$PWD" != "$INSTALL_DIR" ]]; then
-        msg_header "Inicialização"
-        msg_info "Instalando dependências (git)..."
-        if ! command -v git >/dev/null; then
-            apt-get update -qq
-            apt-get install -y git -qq
-        fi
-
-        if [ -d "$INSTALL_DIR" ]; then
-            msg_info "Atualizando repositório em $INSTALL_DIR..."
-            cd "$INSTALL_DIR"
-            git pull
-        else
-            msg_info "Clonando repositório para $INSTALL_DIR..."
-            git clone "$REPO_URL" "$INSTALL_DIR"
-            cd "$INSTALL_DIR"
-        fi
-
-        chmod +x "$SCRIPT_NAME"
-        msg_info "Reiniciando script a partir do diretório de instalação..."
-        exec bash "$SCRIPT_NAME"
-    fi
-}
-
-# Verificar Dependências do Sistema
-check_dependencies() {
-    if ! command -v whiptail >/dev/null; then
-        msg_info "Instalando whiptail..."
-        apt-get update -qq
-        apt-get install -y whiptail -qq
-    fi
-}
-
-# Funções de Parsing de Script
-get_script_metadata() {
-    local file="$1"
-    local tag="$2"
-    # Procura pela tag e remove espaços extras
-    grep "^# $tag:" "$file" | cut -d: -f2- | sed 's/^[ \t]*//'
-}
-
-# Scanner de Scripts
-scan_scripts() {
-    local category="$1"
-    
-    if [ ! -d "$category" ]; then
-        return
-    fi
-    
-    # Listar arquivos .sh
-    for file in "$category"/*.sh; do
-        [ -e "$file" ] || continue
-        
-        # Ler Metadata
-        TITLE=$(get_script_metadata "$file" "Title")
-        DESC=$(get_script_metadata "$file" "Description")
-        SUPPORTED=$(get_script_metadata "$file" "Supported")
-        
-        # Novos Metadados
-        INTERACTIVE=$(get_script_metadata "$file" "Interactive")
-        REBOOT=$(get_script_metadata "$file" "Reboot")
-        NETWORK=$(get_script_metadata "$file" "Network")
-        
-        # Defaults
-        [ -z "$TITLE" ] && TITLE=$(basename "$file")
-        [ -z "$INTERACTIVE" ] && INTERACTIVE="no"
-        [ -z "$REBOOT" ] && REBOOT="no"
-        [ -z "$NETWORK" ] && NETWORK="safe"
-        
-        # Filtro de Ambiente
-        SHOW=true
-        if [[ -n "$SUPPORTED" ]]; then
-            if [[ "$ENV_TYPE" == "LXC" && "$SUPPORTED" != *"LXC"* ]]; then
-                SHOW=false
-            fi
-            if [[ "$ENV_TYPE" != "LXC" && "$SUPPORTED" != *"VM"* && "$SUPPORTED" != *"ALL"* && -n "$SUPPORTED" ]]; then
-                 if [[ "$SUPPORTED" == *"LXC"* && "$SUPPORTED" != *"VM"* ]]; then
-                     SHOW=false
-                 fi
-            fi
-        fi
-        
-        if [ "$SHOW" = true ]; then
-            # Format: FILE|TITLE|DESC|INTERACTIVE|REBOOT|NETWORK|CATEGORY
-            MENU_ITEMS+=("$file|$TITLE|$DESC|$INTERACTIVE|$REBOOT|$NETWORK|$category")
-        fi
-    done
-}
-
-# Menu Principal com Whiptail
-show_menu_whiptail() {
-    CATEGORIES=()
-    while IFS= read -r -d '' dir; do
-        dir_name=$(basename "$dir")
-        # Ignorar diretórios específicos
-        if [[ "$dir_name" != "templates" && "$dir_name" != "docs" && "$dir_name" != "test" ]]; then
-             CATEGORIES+=("$dir_name")
-        fi
-    done < <(find . -maxdepth 1 -type d -not -path '*/.*' -not -path '.' -print0 | sort -z)
-    MENU_ITEMS=()
-    FAILED_SCRIPTS=()
-    SUCCESS_SCRIPTS=()
-    NEED_REBOOT=false
-    
-    # Coletar todos os scripts
-    for cat in "${CATEGORIES[@]}"; do
-        scan_scripts "$cat"
-    done
-    
-    # Construir argumentos para o whiptail
-    local WHIP_ARGS=()
-    
-    # Calcular dimensões do terminal
-    local TERM_HEIGHT=$(stty size 2>/dev/null | cut -d ' ' -f 1)
-    local TERM_WIDTH=$(stty size 2>/dev/null | cut -d ' ' -f 2)
-
-    # Fallback caso stty falhe
-    [ -z "$TERM_HEIGHT" ] && TERM_HEIGHT=24
-    [ -z "$TERM_WIDTH" ] && TERM_WIDTH=80
-
-    # Dimensões da caixa e lista
-    local BOX_HEIGHT=$((TERM_HEIGHT - 4))
-    [ $BOX_HEIGHT -lt 10 ] && BOX_HEIGHT=10
-    local LIST_HEIGHT=$((BOX_HEIGHT - 8))
-    [ $LIST_HEIGHT -lt 5 ] && LIST_HEIGHT=5
-    local BOX_WIDTH=$((TERM_WIDTH - 4))
-    [ $BOX_WIDTH -lt 60 ] && BOX_WIDTH=60
-
-    # Calcular largura da coluna de Título dinamicamente
-    # Estrutura: TITLE (VAR)  CATEGORY (14)  TAGS (~20)
-    # Espaço fixo aproximado: 35 chars
-    local MAX_TITLE_LEN=$((BOX_WIDTH - 45))
-    [ $MAX_TITLE_LEN -lt 20 ] && MAX_TITLE_LEN=20
-
-    for i in "${!MENU_ITEMS[@]}"; do
-        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$i]}"
-        
-        # Tags visuais
-        local TAGS=""
-        [[ "$INTERACTIVE" == "yes" ]] && TAGS+=" [Int]"
-        [[ "$REBOOT" == "yes" ]] && TAGS+=" [Reboot]"
-        [[ "$NETWORK" == "risk" ]] && TAGS+=" [NetRisk]" # Corrigido para NetRisk
-        [[ "$NETWORK" != "safe" && "$NETWORK" != "risk" ]] && TAGS+=" [NetRisk]"
-
-        # Formatação estilo tabela dinâmica
-        local DISPLAY_STR=$(printf "%-${MAX_TITLE_LEN}s  %-14s  %s" "${TITLE:0:$MAX_TITLE_LEN}" "(${CAT})" "${TAGS}")
-        
-        # ID é o índice no array MENU_ITEMS
-        WHIP_ARGS+=("$i" "$DISPLAY_STR" "OFF")
-    done
-    
-    if [ ${#WHIP_ARGS[@]} -eq 0 ]; then
-        msg_error "Nenhum script disponível para este ambiente ($ENV_TYPE)."
-        exit 1
-    fi
-    
-    CHOICES=$(whiptail --title "Custom Scripts Manager ($ENV_TYPE)" \
-                       --checklist "Selecione os scripts para instalar/executar:\nUse ESPAÇO para selecionar, ENTER para confirmar." \
-                       "$BOX_HEIGHT" "$BOX_WIDTH" "$LIST_HEIGHT" \
-                       "${WHIP_ARGS[@]}" 3>&1 1>&2 2>&3)
-    
-    exit_status=$?
-    if [ $exit_status -ne 0 ]; then
-        exit 0
-    fi
-    
-    # Remover aspas do output do whiptail
-    CHOICES=$(echo "$CHOICES" | tr -d '"')
-    
-    if [ -z "$CHOICES" ]; then
-        return
-    fi
-    
-    run_queue "$CHOICES"
-}
-
-# Lógica de Execução Inteligente
-run_queue() {
-    local choices_str="$1"
-    
-    local interactive_queue=()
-    local safe_queue=()
-    local risk_queue=()
-    
-    # Separar em filas
-    for id in $choices_str; do
-        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
-        
-        # Prioridade de Risco: Se for Network Risk, vai para o final, mesmo se for interativo.
-        if [[ "$NETWORK" == "risk" ]]; then
-            risk_queue+=("$id")
-        elif [[ "$INTERACTIVE" == "yes" ]]; then
-            interactive_queue+=("$id")
-        else
-            safe_queue+=("$id")
-        fi
-    done
-    
-    # Combinar filas na ordem correta
-    # Ordem: Interativos -> Seguros -> Risco de Rede
-    local final_queue=("${interactive_queue[@]}" "${safe_queue[@]}" "${risk_queue[@]}")
-    
-    clear
-    msg_header "Iniciando Execução em Lote"
-    echo "Total de scripts selecionados: ${#final_queue[@]}"
-    sleep 2
-    
-    # Limpar log anterior
-    echo "--- Execução iniciada em $(date) ---" > "$SUMMARY_LOG"
-
-    for id in "${final_queue[@]}"; do
-        IFS='|' read -r FILE TITLE DESC INTERACTIVE REBOOT NETWORK CAT <<< "${MENU_ITEMS[$id]}"
-        
-        msg_header "Executando ($CAT): $TITLE"
-        if [[ "$REBOOT" == "yes" ]]; then
-            msg_warn "Este script requer reinicialização. O reboot será agendado para o final."
-        fi
-        
-        # Executar Script
-        bash "$FILE"
-        local ret=$?
-        
-        if [ $ret -eq 0 ]; then
-            msg_info "$TITLE concluído com sucesso."
-            SUCCESS_SCRIPTS+=("$TITLE")
-            if [[ "$REBOOT" == "yes" ]]; then
-                NEED_REBOOT=true
-            fi
-        else
-            msg_error "$TITLE falhou (Código: $ret). Continuando..."
-            FAILED_SCRIPTS+=("$TITLE (Exit Code: $ret)")
-            sleep 3
-        fi
-        
-        echo "------------------------------------------------"
-    done
-    
-    finalize
-}
-
-generate_summary() {
-    local summary_text="Resumo da Execução:\n\n"
-    
-    if [ ${#SUCCESS_SCRIPTS[@]} -gt 0 ]; then
-        summary_text+="SUCESSO:\n"
-        for s in "${SUCCESS_SCRIPTS[@]}"; do
-            summary_text+="  - $s\n"
-        done
-        summary_text+="\n"
-    fi
-
-    if [ ${#FAILED_SCRIPTS[@]} -gt 0 ]; then
-        summary_text+="FALHAS:\n"
-        for f in "${FAILED_SCRIPTS[@]}"; do
-            summary_text+="  - $f\n"
-        done
-        summary_text+="\nVerifique o console para mais detalhes."
-    else
-        summary_text+="Todos os scripts foram executados com sucesso."
-    fi
-
-    # Gravar no log
-    echo -e "$summary_text" >> "$SUMMARY_LOG"
-    
-    # Exibir no Whiptail
-    whiptail --title "Relatório de Execução" --msgbox "$summary_text" 20 70
-}
-
-finalize() {
-    generate_summary
-    
-    msg_header "Execução Finalizada"
-    
-    if [ "$NEED_REBOOT" = true ]; then
-        if (whiptail --title "Reinicialização Necessária" --yesno "Um ou mais scripts solicitam reinicialização para aplicar as alterações.\nDeseja reiniciar agora?" 10 60); then
-            msg_info "Reiniciando sistema..."
-            reboot
-        else
-            msg_warn "Por favor, reinicie o sistema manualmente quando possível."
-        fi
-    else
-        msg_info "Todos os processos concluídos. Pressione Enter para sair."
-        read -r
-    fi
-    exit 0
-}
-
-main() {
-    # Verificar root
-    if [ "$EUID" -ne 0 ]; then
-        echo "Por favor, execute como root."
-        exit 1
-    fi
+# ── Banner ───────────────────────────────────────────────────────────────────
+show_banner() {
+    echo -e "${CS_CYAN}${CS_BOLD}"
+    cat << 'BANNER'
+   ╔═══════════════════════════════════════════╗
+   ║       🐧  Custom Scripts  v2.0           ║
+   ║       Scripts Linux Sortidos 2025         ║
+   ╚═══════════════════════════════════════════╝
+BANNER
+    echo -e "${CS_NC}"
 
     detect_env
-    bootstrap
-    check_dependencies
-    
-    while true; do
-        show_menu_whiptail
-    done
+    detect_distro
+    echo -e "  ${CS_DIM}Ambiente:${CS_NC} ${CS_BOLD}${CS_ENV_TYPE}${CS_NC}  │  ${CS_DIM}Distro:${CS_NC} ${CS_BOLD}${CS_DISTRO_PRETTY}${CS_NC}"
+
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        echo -e "  ${CS_MAGENTA}${CS_BOLD}⚠ MODO DRY-RUN ATIVO - Nenhuma alteração será feita${CS_NC}"
+    fi
+    echo ""
 }
 
-main
+# ── Auto-Bootstrap ───────────────────────────────────────────────────────────
+bootstrap() {
+    # Se já estamos no diretório de instalação, não precisa clonar
+    if [[ "$SCRIPT_DIR" == "$INSTALL_DIR" ]]; then
+        return 0
+    fi
+
+    # Se o repo já existe em INSTALL_DIR, atualiza
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+        msg_step "Atualizando repositório em $INSTALL_DIR..."
+        cd "$INSTALL_DIR"
+        git pull --quiet 2>/dev/null || msg_warn "Falha ao atualizar (usando versão local)."
+        exec bash setup.sh "$@"
+    fi
+
+    # Verificar se estamos num clone local (dev mode)
+    if [[ -d "${SCRIPT_DIR}/.git" ]]; then
+        msg_debug "Executando em modo de desenvolvimento local."
+        return 0
+    fi
+
+    # Primeira execução: clonar
+    msg_header "Primeira Execução"
+    check_dependencies git
+
+    msg_step "Clonando repositório para $INSTALL_DIR..."
+    cs_run git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    chmod +x setup.sh
+    exec bash setup.sh "$@"
+}
+
+# ── Menu com Whiptail ────────────────────────────────────────────────────────
+show_menu() {
+    # Garantir whiptail
+    if ! check_command whiptail; then
+        msg_step "Instalando whiptail..."
+        cs_apt_install whiptail
+    fi
+
+    # Escanear e filtrar
+    cs_registry_scan "${SCRIPT_DIR}"
+    cs_registry_filter_env
+
+    if [[ ${#CS_REGISTRY_FILES[@]} -eq 0 ]]; then
+        msg_error "Nenhum script disponível para este ambiente (${CS_ENV_TYPE})."
+        exit 1
+    fi
+
+    # Calcular dimensões do terminal
+    local term_h term_w
+    term_h=$(tput lines 2>/dev/null || echo 24)
+    term_w=$(tput cols 2>/dev/null || echo 80)
+
+    local box_h=$((term_h - 4)); [[ $box_h -lt 12 ]] && box_h=12
+    local box_w=$((term_w - 4)); [[ $box_w -lt 60 ]] && box_w=60
+    local list_h=$((box_h - 8)); [[ $list_h -lt 5 ]] && list_h=5
+    local max_title=$((box_w - 45)); [[ $max_title -lt 20 ]] && max_title=20
+
+    # Construir itens do menu agrupados por categoria
+    local whip_args=()
+    local -a indexed_files=()
+    local idx=0
+    local current_cat=""
+
+    while IFS= read -r cat; do
+        while IFS= read -r file; do
+            local title="${CS_REGISTRY_TITLE[$file]}"
+            local interactive="${CS_REGISTRY_INTERACTIVE[$file]}"
+            local reboot="${CS_REGISTRY_REBOOT[$file]}"
+            local network="${CS_REGISTRY_NETWORK[$file]}"
+
+            # Tags visuais
+            local tags=""
+            [[ "$interactive" == "yes" ]] && tags+=" ⚙"
+            [[ "$reboot" == "yes" ]]      && tags+=" ↻"
+            [[ "$network" == "risk" ]]    && tags+=" ⚠"
+
+            # Categoria label
+            local cat_short="${cat}"
+            [[ "$cat" != "$current_cat" ]] && current_cat="$cat"
+
+            local display
+            display=$(printf "%-${max_title}s  (%-12s) %s" "${title:0:$max_title}" "$cat_short" "$tags")
+
+            whip_args+=("$idx" "$display" "OFF")
+            indexed_files+=("$file")
+            ((idx++))
+        done < <(cs_registry_by_category "$cat")
+    done < <(cs_registry_categories)
+
+    # Título dinâmico
+    local menu_title="Custom Scripts v${VERSION} [${CS_ENV_TYPE}]"
+    if [[ "${CS_DRY_RUN}" == "true" ]]; then
+        menu_title+=" 🔍 DRY-RUN"
+    fi
+
+    # Mostrar menu
+    local choices
+    choices=$(whiptail \
+        --title "$menu_title" \
+        --checklist "Selecione com ESPAÇO, confirme com ENTER:\n\n⚙ = Interativo  ↻ = Reboot  ⚠ = Risco de Rede" \
+        "$box_h" "$box_w" "$list_h" \
+        "${whip_args[@]}" \
+        3>&1 1>&2 2>&3) || return 0
+
+    # Remover aspas
+    choices=$(echo "$choices" | tr -d '"')
+    [[ -z "$choices" ]] && return 0
+
+    # Mapear IDs para arquivos
+    local selected_files=()
+    for id in $choices; do
+        selected_files+=("${indexed_files[$id]}")
+    done
+
+    # Confirmar seleção
+    echo ""
+    msg_header "Scripts selecionados"
+    for file in "${selected_files[@]}"; do
+        local title="${CS_REGISTRY_TITLE[$file]}"
+        local cat="${CS_REGISTRY_CATEGORY[$file]}"
+        echo -e "  ${CS_CYAN}•${CS_NC} ${title} ${CS_DIM}(${cat})${CS_NC}"
+    done
+    echo ""
+
+    if ! confirm "Confirma a execução?" "y"; then
+        msg_info "Operação cancelada."
+        return 0
+    fi
+
+    # Executar
+    cs_runner_reset
+    cs_run_batch "${selected_files[@]}"
+}
+
+# ── Executar script específico ───────────────────────────────────────────────
+run_specific() {
+    local target="$1"
+
+    cs_registry_scan "${SCRIPT_DIR}"
+
+    # Buscar por nome parcial
+    local found=""
+    for file in "${CS_REGISTRY_FILES[@]}"; do
+        if [[ "$file" == *"$target"* ]]; then
+            found="$file"
+            break
+        fi
+    done
+
+    if [[ -z "$found" ]]; then
+        msg_error "Script não encontrado: $target"
+        msg_info "Use --list para ver scripts disponíveis."
+        exit 1
+    fi
+
+    msg_info "Encontrado: ${CS_REGISTRY_TITLE[$found]} (${found})"
+    cs_runner_reset
+    cs_run_script "$found"
+}
+
+# ── Ajuda ────────────────────────────────────────────────────────────────────
+show_help() {
+    cat << EOF
+${CS_BOLD}Custom Scripts v${VERSION}${CS_NC} - Scripts Linux Sortidos
+
+${CS_BOLD}Uso:${CS_NC}
+  bash setup.sh [opções]
+
+${CS_BOLD}Opções:${CS_NC}
+  ${CS_GREEN}(sem opções)${CS_NC}         Menu interativo (recomendado)
+  ${CS_GREEN}--list${CS_NC}               Listar todos os scripts disponíveis
+  ${CS_GREEN}--dry-run${CS_NC}            Modo simulação (nada é instalado)
+  ${CS_GREEN}--run <script>${CS_NC}       Executar script específico (nome parcial)
+  ${CS_GREEN}--verbose${CS_NC}            Modo detalhado (debug)
+  ${CS_GREEN}--version${CS_NC}            Mostrar versão
+  ${CS_GREEN}--help${CS_NC}               Esta mensagem
+
+${CS_BOLD}Exemplos:${CS_NC}
+  bash setup.sh                          # Menu interativo
+  bash setup.sh --dry-run                # Testar sem instalar nada
+  bash setup.sh --list                   # Ver scripts disponíveis
+  bash setup.sh --run docker-install     # Instalar Docker direto
+  bash setup.sh --dry-run --run tailscale # Simular instalação do Tailscale
+
+${CS_BOLD}Mais informações:${CS_NC}
+  https://github.com/gutierrezx7/custom_scripts
+
+EOF
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+main() {
+    local action="menu"
+    local run_target=""
+
+    # Parse de argumentos
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)   CS_DRY_RUN=true; shift ;;
+            --verbose)   CS_VERBOSE=true; shift ;;
+            --no-color)  NO_COLOR=1; shift ;;
+            --list)      action="list"; shift ;;
+            --run)       action="run"; run_target="${2:-}"; shift 2 ;;
+            --version)   echo "Custom Scripts v${VERSION}"; exit 0 ;;
+            --help|-h)   show_help; exit 0 ;;
+            *)           msg_error "Opção desconhecida: $1"; show_help; exit 1 ;;
+        esac
+    done
+
+    # Verificar root
+    check_root
+
+    # Detectar ambiente
+    detect_env
+    detect_distro
+
+    # Bootstrap (clonar se necessário)
+    bootstrap "$@"
+
+    # Executar ação
+    case "$action" in
+        list)
+            show_banner
+            cs_registry_scan "${SCRIPT_DIR}"
+            cs_registry_filter_env
+            cs_registry_print
+            ;;
+        run)
+            show_banner
+            if [[ -z "$run_target" ]]; then
+                msg_error "Especifique o nome do script: --run <nome>"
+                exit 1
+            fi
+            run_specific "$run_target"
+            ;;
+        menu)
+            show_banner
+            while true; do
+                show_menu
+                echo ""
+                if ! confirm "Voltar ao menu principal?" "y"; then
+                    msg_info "Até a próxima! 👋"
+                    exit 0
+                fi
+            done
+            ;;
+    esac
+}
+
+main "$@"
