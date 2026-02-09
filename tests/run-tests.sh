@@ -98,7 +98,7 @@ test_dry_run() {
     script_name=$(basename "$script")
     local relative_path="${script#$PROJECT_DIR/}"
 
-    ((TOTAL++))
+    ((TOTAL+=1))
 
     msg_info "DRY-RUN: ${script_name} (${distro})"
 
@@ -111,10 +111,10 @@ test_dry_run() {
     exit_code=${exit_code:-0}
 
     if [[ $exit_code -eq 0 ]]; then
-        ((PASSED++))
+        ((PASSED+=1))
         msg_pass "${script_name} dry-run OK (${distro})"
     else
-        ((FAILED++))
+        ((FAILED+=1))
         FAILED_LIST+=("${script_name} [dry-run/${distro}]")
         msg_fail "${script_name} dry-run FALHOU (${distro}, exit: ${exit_code})"
         echo "$output" | tail -5 | sed 's/^/    /'
@@ -127,7 +127,7 @@ test_metadata() {
     local script_name
     script_name=$(basename "$script")
 
-    ((TOTAL++))
+    ((TOTAL+=1))
 
     local title description supported
     title=$(head -30 "$script" | grep -i "^# Title:" | head -1 | sed 's/^# Title:[ \t]*//')
@@ -146,10 +146,10 @@ test_metadata() {
         errors+=("Shebang inválido: $shebang")
 
     if [[ ${#errors[@]} -eq 0 ]]; then
-        ((PASSED++))
+        ((PASSED+=1))
         msg_pass "${script_name}: metadados OK"
     else
-        ((FAILED++))
+        ((FAILED+=1))
         FAILED_LIST+=("${script_name} [metadata]")
         msg_fail "${script_name}: ${errors[*]}"
     fi
@@ -161,20 +161,20 @@ test_shellcheck() {
     local script_name
     script_name=$(basename "$script")
 
-    ((TOTAL++))
+    ((TOTAL+=1))
 
     if ! command -v shellcheck &>/dev/null; then
-        ((SKIPPED++))
+        ((SKIPPED+=1))
         msg_skip "${script_name}: shellcheck não instalado"
         return
     fi
 
     local output
     if output=$(shellcheck -S warning "$script" 2>&1); then
-        ((PASSED++))
+        ((PASSED+=1))
         msg_pass "${script_name}: shellcheck OK"
     else
-        ((FAILED++))
+        ((FAILED+=1))
         FAILED_LIST+=("${script_name} [shellcheck]")
         msg_fail "${script_name}: shellcheck encontrou problemas"
         echo "$output" | head -10 | sed 's/^/    /'
@@ -197,6 +197,8 @@ collect_scripts() {
     fi
 
     # Todos os scripts do projeto
+    [[ -f "$PROJECT_DIR/setup.sh" ]] && echo "$PROJECT_DIR/setup.sh"
+
     local ignore_dirs=("templates" "docs" "tests" "lib")
     while IFS= read -r -d '' dir; do
         local dirname

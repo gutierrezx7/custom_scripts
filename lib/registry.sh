@@ -37,7 +37,7 @@ declare -A CS_CATEGORY_LABELS=(
 _cs_get_meta() {
     local file="$1"
     local key="$2"
-    head -30 "$file" | grep -i "^# ${key}:" | head -1 | sed "s/^# ${key}:[ \t]*//" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//'
+    head -30 "$file" | grep -i "^# ${key}:" | head -1 | sed "s/^# ${key}:[ \t]*//" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' || true
 }
 
 _cs_is_valid_script() {

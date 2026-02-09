@@ -241,7 +241,7 @@ show_menu() {
 
             whip_args+=("$idx" "$display" "OFF")
             indexed_files+=("$file")
-            ((idx++))
+            ((idx+=1))
         done < <(cs_registry_by_category "$cat")
     done < <(cs_registry_categories)
 
@@ -464,7 +464,7 @@ run_wizard() {
 
             whip_args+=("$idx" "$display" "OFF")
             indexed_files+=("$file")
-            ((idx++))
+            ((idx+=1))
         done < <(cs_registry_by_category "$cat")
     done < <(cs_registry_categories)
 

@@ -46,6 +46,7 @@ msg_success() { echo -e "${CS_GREEN}${CS_BOLD}[✔]${CS_NC} $1"; }
 msg_step()    { echo -e "${CS_CYAN}  ➜${CS_NC} $1"; }
 msg_debug()   {
     [[ "${CS_VERBOSE}" == "true" ]] && echo -e "${CS_DIM}[DEBUG]${CS_NC}  $1"
+    return 0
 }
 msg_dry_run() {
     echo -e "${CS_MAGENTA}[DRY-RUN]${CS_NC} $1"
@@ -77,6 +78,10 @@ cs_run() {
 
 # ── Verificações comuns ──────────────────────────────────────────────────────
 check_root() {
+    if [[ "${CS_SKIP_ROOT_CHECK:-}" == "true" ]]; then
+        msg_warn "Verificação de root pulada (CS_SKIP_ROOT_CHECK=true)."
+        return 0
+    fi
     if [[ $EUID -ne 0 ]]; then
         msg_error "Este script precisa ser executado como root (sudo)."
         exit 1

@@ -19,11 +19,11 @@
 readonly _CS_STATE_LOADED=1
 
 # ── Caminhos ─────────────────────────────────────────────────────────────────
-CS_STATE_DIR="/var/lib/custom_scripts"
+CS_STATE_DIR="${CS_STATE_DIR:-/var/lib/custom_scripts}"
 CS_STATE_FILE="${CS_STATE_DIR}/state"
 CS_STATE_WIZARD="${CS_STATE_DIR}/wizard"
 CS_RESUME_SERVICE="custom-scripts-resume"
-CS_RESUME_SERVICE_FILE="/etc/systemd/system/${CS_RESUME_SERVICE}.service"
+CS_RESUME_SERVICE_FILE="${CS_RESUME_SERVICE_FILE:-/etc/systemd/system/${CS_RESUME_SERVICE}.service}"
 
 # ── Criar diretório de estado ────────────────────────────────────────────────
 _cs_state_init() {

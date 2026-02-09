@@ -17,7 +17,7 @@ readonly _CS_RUNNER_LOADED=1
 declare -a CS_RUN_SUCCESS=()
 declare -a CS_RUN_FAILED=()
 CS_RUN_NEED_REBOOT=false
-CS_RUN_LOG="/var/log/custom_scripts_summary.log"
+CS_RUN_LOG="${CS_RUN_LOG:-/var/log/custom_scripts_summary.log}"
 CS_RUN_REBOOT_NOW=false   # Indica que um reboot imediato é necessário
 
 # ── Executar um script individual ────────────────────────────────────────────
@@ -123,7 +123,7 @@ _cs_preview_script() {
     local line_num=0
 
     while IFS= read -r line; do
-        ((line_num++))
+        ((line_num+=1))
 
         # Pular cabeçalho (primeiras linhas de metadados)
         [[ $line_num -le 15 ]] && continue
@@ -138,7 +138,7 @@ _cs_preview_script() {
         # Mostrar comandos relevantes
         echo -e "  ${CS_DIM}│${CS_NC} $line"
 
-    done < "$file" | head -40
+    done < "$file" | head -40 || true
 
     local total_lines
     total_lines=$(wc -l < "$file")
