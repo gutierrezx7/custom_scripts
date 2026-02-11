@@ -257,12 +257,18 @@ show_menu() {
     local exit_code=0
 
     # Captura saída e exit code separadamente
+    # Desativa debug temporariamente para não quebrar whiptail
+    local debug_on=0
+    if [[ "$-" == *x* ]]; then debug_on=1; set +x; fi
+
     choices=$(whiptail \
         --title "$menu_title" \
         --checklist "Selecione com ESPAÇO, confirme com ENTER:\n\n[I] = Interativo  [R] = Reboot  [!] = Risco de Rede" \
         "$box_h" "$box_w" "$list_h" \
         "${whip_args[@]}" \
         3>&1 1>&2 2>&3) || exit_code=$?
+
+    if [[ "$debug_on" == "1" ]]; then set -x; fi
 
     if [[ $exit_code -ne 0 ]]; then
         # Se usuário cancelou (1) ou ESC (255), retorna silenciosamente
@@ -687,6 +693,9 @@ show_main_menu() {
     fi
 
     local choice
+    local debug_on=0
+    if [[ "$-" == *x* ]]; then debug_on=1; set +x; fi
+
     choice=$(whiptail \
         --title "$menu_title" \
         --menu "Escolha uma opção:" \
@@ -696,6 +705,8 @@ show_main_menu() {
         "3" "Listar scripts disponíveis" \
         "4" "Sair" \
         3>&1 1>&2 2>&3) || choice="4"
+
+    if [[ "$debug_on" == "1" ]]; then set -x; fi
 
     case "$choice" in
         1) run_wizard ;;
