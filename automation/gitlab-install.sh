@@ -41,7 +41,9 @@ else
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --dry-run)  CS_DRY_RUN=true; shift ;;
-                --verbose)  CS_VERBOSE=true; shift ;;
+                --verbose)
+                    # shellcheck disable=SC2034
+                    CS_VERBOSE=true; shift ;;
                 *)          shift ;;
             esac
         done
