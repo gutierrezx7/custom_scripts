@@ -21,7 +21,7 @@ set -eo pipefail
 # ── Configurações ────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="${CS_INSTALL_DIR:-/opt/custom_scripts}"
-VERSION="2.1.0"
+CS_VERSION="2.1.0"
 # shellcheck disable=SC2034
 BUILD_DATE="2026-02-11"
 
@@ -47,6 +47,9 @@ fi
 
 # ── Auto-Bootstrap ───────────────────────────────────────────────────────────
 bootstrap() {
+    # Garante que set -u não quebre o bootstrap se herdado do ambiente
+    set +u
+
     local forward_args=("$@")
 
     # Já estamos no diretório de instalação com lib/ disponível?
@@ -322,7 +325,7 @@ main() {
             --run)       action="run"; run_target="${2:-}"; shift 2 ;;
             --wizard)    action="wizard"; shift ;;
             --resume)    action="resume"; shift ;;
-            --version)   echo "Custom Scripts v${VERSION}"; exit 0 ;;
+            --version)   echo "Custom Scripts v${CS_VERSION}"; exit 0 ;;
             --help|-h)   show_help; exit 0 ;; # Assume show_help existe ou remove
             *)           msg_error "Opção desconhecida: $1"; exit 1 ;;
         esac
