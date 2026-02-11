@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Custom Scripts - Registry / Auto-Discovery Engine (registry.sh)
+#
+# Responsável por escanear scripts, ler metadados e filtrar por compatibilidade.
+# Suporta modo Local (sistema de arquivos) e Remoto (GitHub API).
 # =============================================================================
 
 [[ -n "${_CS_REGISTRY_LOADED:-}" ]] && return 0
@@ -10,325 +13,244 @@ readonly _CS_REGISTRY_LOADED=1
 declare -a CS_REGISTRY_FILES=()
 declare -A CS_REGISTRY_TITLE=()
 declare -A CS_REGISTRY_DESC=()
-declare -A CS_REGISTRY_SUPPORTED=()
-# shellcheck disable=SC2034
-declare -A CS_REGISTRY_INTERACTIVE=()
-# shellcheck disable=SC2034
-declare -A CS_REGISTRY_REBOOT=()
-# shellcheck disable=SC2034
-declare -A CS_REGISTRY_NETWORK=()
+declare -A CS_REGISTRY_SUPPORTED=()    # "lxc,vm" etc
+declare -A CS_REGISTRY_INTERACTIVE=()  # "yes" or "no"
+declare -A CS_REGISTRY_REBOOT=()       # "yes" or "no"
+declare -A CS_REGISTRY_NETWORK=()      # "safe" or "risk"
 declare -A CS_REGISTRY_CATEGORY=()
 declare -A CS_REGISTRY_VERSION=()
-# shellcheck disable=SC2034
-declare -A CS_REGISTRY_TAGS=()
-# shellcheck disable=SC2034
-declare -A CS_REGISTRY_DRYRUN=()
 
+# Diretórios e arquivos a ignorar
 CS_REGISTRY_IGNORE_DIRS=("templates" "docs" "tests" "lib" ".git" ".github")
 CS_REGISTRY_IGNORE_FILES=("setup.sh")
 
-# ── Nomes amigáveis das categorias ──────────────────────────────────────────
-declare -A CS_CATEGORY_LABELS=(
-    ["system-admin"]="Sistema & Utilitários"
-    ["docker"]="Docker & DevOps"
-    ["network"]="Redes"
-    ["security"]="Segurança"
-    ["monitoring"]="Monitoramento"
-    ["maintenance"]="Manutenção"
-    ["backup"]="Backup"
-    ["automation"]="Automação"
-)
+# ── Parser de Metadados (Single Pass) ────────────────────────────────────────
+# Lê as primeiras 30 linhas e extrai variáveis
+_cs_parse_metadata() {
+    local content="$1"
+    local file_path="$2"
 
-_cs_get_meta() {
-    local file="$1"
-    local key="$2"
-    head -30 "$file" | grep -i "^# ${key}:" | head -1 | sed "s/^# ${key}:[ \t]*//" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' || true
+    # Valores padrão
+    local title="" desc="" supported="all" interactive="no" reboot="no" network="safe" version="1.0"
+
+    # Extração via regex (case insensitive)
+    # Nota: BASH_REMATCH funciona bem, mas grep/sed é mais portável para blocos de texto
+
+    title=$(echo "$content" | grep -i "^# Title:" | head -1 | sed 's/^# Title:[[:space:]]*//I' | tr -d '\r')
+    if [[ -z "$title" ]]; then return 1; fi # Script inválido se não tiver título
+
+    desc=$(echo "$content" | grep -i "^# Description:" | head -1 | sed 's/^# Description:[[:space:]]*//I' | tr -d '\r')
+    supported=$(echo "$content" | grep -i "^# Supported:" | head -1 | sed 's/^# Supported:[[:space:]]*//I' | tr -d '\r')
+    interactive=$(echo "$content" | grep -i "^# Interactive:" | head -1 | sed 's/^# Interactive:[[:space:]]*//I' | tr -d '\r')
+    reboot=$(echo "$content" | grep -i "^# Reboot:" | head -1 | sed 's/^# Reboot:[[:space:]]*//I' | tr -d '\r')
+    network=$(echo "$content" | grep -i "^# Network:" | head -1 | sed 's/^# Network:[[:space:]]*//I' | tr -d '\r')
+    version=$(echo "$content" | grep -i "^# Version:" | head -1 | sed 's/^# Version:[[:space:]]*//I' | tr -d '\r')
+
+    # Defaults se vazio
+    [[ -z "$supported" ]]   && supported="all"
+    [[ -z "$interactive" ]] && interactive="no"
+    [[ -z "$reboot" ]]      && reboot="no"
+    [[ -z "$network" ]]     && network="safe"
+    [[ -z "$version" ]]     && version="1.0"
+    [[ -z "$desc" ]]        && desc="$title"
+
+    # Normalização
+    supported="${supported,,}"     # lowercase
+    interactive="${interactive,,}"
+    reboot="${reboot,,}"
+    network="${network,,}"
+
+    # Salvar no registro
+    CS_REGISTRY_FILES+=("$file_path")
+    CS_REGISTRY_TITLE["$file_path"]="$title"
+    CS_REGISTRY_DESC["$file_path"]="$desc"
+    CS_REGISTRY_SUPPORTED["$file_path"]="$supported"
+    CS_REGISTRY_INTERACTIVE["$file_path"]="$interactive"
+    CS_REGISTRY_REBOOT["$file_path"]="$reboot"
+    CS_REGISTRY_NETWORK["$file_path"]="$network"
+    CS_REGISTRY_VERSION["$file_path"]="$version"
+
+    # Categoria baseada no diretório pai
+    local cat
+    cat=$(dirname "$file_path" | xargs basename)
+    [[ "$cat" == "." ]] && cat="root"
+    CS_REGISTRY_CATEGORY["$file_path"]="$cat"
+
+    return 0
 }
 
-_cs_is_valid_script() {
-    local file="$1"
-    local title
-    title=$(_cs_get_meta "$file" "Title")
-    [[ -n "$title" ]]
-}
+# ── Scan Local ───────────────────────────────────────────────────────────────
+_cs_scan_local() {
+    local base_dir="$1"
 
-_cs_scan_directory() {
-    local dir="$1"
-    local category
-    category=$(basename "$dir")
+    # Encontrar categorias (subdiretórios)
+    while IFS= read -r -d '' cat_dir; do
+        local cat_name
+        cat_name=$(basename "$cat_dir")
 
-    for file in "$dir"/*.sh; do
-        [[ -e "$file" ]] || continue
-
-        local basename_file
-        basename_file=$(basename "$file")
+        # Ignorar pastas proibidas
         local skip=false
-        for ignore in "${CS_REGISTRY_IGNORE_FILES[@]}"; do
-            [[ "$basename_file" == "$ignore" ]] && skip=true && break
+        for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
+            [[ "$cat_name" == "$ignore" ]] && skip=true && break
         done
         [[ "$skip" == "true" ]] && continue
 
-        if ! _cs_is_valid_script "$file"; then
-            msg_debug "Ignorando $file (metadados incompletos - falta 'Title:')"
-            continue
-        fi
+        # Escanear arquivos .sh na categoria
+        for file in "$cat_dir"/*.sh; do
+            [[ -e "$file" ]] || continue
 
-        local title desc supported interactive reboot network version tags dryrun
-        title=$(_cs_get_meta "$file" "Title")
-        desc=$(_cs_get_meta "$file" "Description")
-        supported=$(_cs_get_meta "$file" "Supported")
-        interactive=$(_cs_get_meta "$file" "Interactive")
-        reboot=$(_cs_get_meta "$file" "Reboot")
-        network=$(_cs_get_meta "$file" "Network")
-        version=$(_cs_get_meta "$file" "Version")
-        tags=$(_cs_get_meta "$file" "Tags")
-        dryrun=$(_cs_get_meta "$file" "DryRun")
+            # Ignorar arquivos proibidos
+            local filename
+            filename=$(basename "$file")
+            local skip_file=false
+            for ignore_f in "${CS_REGISTRY_IGNORE_FILES[@]}"; do
+                [[ "$filename" == "$ignore_f" ]] && skip_file=true && break
+            done
+            [[ "$skip_file" == "true" ]] && continue
 
-        [[ -z "$supported" ]]   && supported="ALL"
-        [[ -z "$interactive" ]] && interactive="no"
-        [[ -z "$reboot" ]]     && reboot="no"
-        [[ -z "$network" ]]    && network="safe"
-        [[ -z "$version" ]]    && version="1.0"
-        [[ -z "$dryrun" ]]     && dryrun="no"
+            # Ler cabeçalho (primeiras 30 linhas)
+            local header
+            header=$(head -n 30 "$file")
 
-        CS_REGISTRY_FILES+=("$file")
-        CS_REGISTRY_TITLE["$file"]="$title"
-        CS_REGISTRY_DESC["$file"]="${desc:-$title}"
-        CS_REGISTRY_SUPPORTED["$file"]="$supported"
-        CS_REGISTRY_INTERACTIVE["$file"]="$interactive"
-        CS_REGISTRY_REBOOT["$file"]="$reboot"
-        CS_REGISTRY_NETWORK["$file"]="$network"
-        CS_REGISTRY_CATEGORY["$file"]="$category"
-        CS_REGISTRY_VERSION["$file"]="$version"
-        CS_REGISTRY_TAGS["$file"]="$tags"
-        CS_REGISTRY_DRYRUN["$file"]="$dryrun"
-    done
+            # Parse
+            _cs_parse_metadata "$header" "$file"
+        done
+    done < <(find "$base_dir" -maxdepth 1 -type d -not -path '*/.*' -not -path "$base_dir" -print0)
 }
 
+# ── Scan Remoto (GitHub) ─────────────────────────────────────────────────────
+_cs_scan_remote() {
+    msg_debug "Iniciando scan remoto..."
+
+    if ! command -v curl &>/dev/null; then
+        msg_error "curl necessário para scan remoto."
+        return 1
+    fi
+
+    local api_url="${REMOTE_API_BASE:-https://api.github.com/repos/gutierrezx7/custom_scripts/git/trees/main?recursive=1}"
+    local json_tmp
+    json_tmp=$(mktemp)
+
+    if ! curl -fsSL "$api_url" -o "$json_tmp"; then
+        msg_error "Falha ao acessar API do GitHub."
+        rm -f "$json_tmp"
+        return 1
+    fi
+
+    local raw_base="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}"
+    local count=0
+
+    # Extrair caminhos de arquivos .sh (ignorando setup.sh e pastas ignoradas)
+    # Nota: grep simples para evitar dependência de jq
+    local files
+    files=$(grep -o '"path": *"[^"]*\.sh"' "$json_tmp" | sed 's/"path": *"//;s/"$//')
+
+    while IFS= read -r path; do
+        # Verificar ignore list
+        local skip=false
+        for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
+            if [[ "$path" == "$ignore/"* || "$path" == "$ignore" ]]; then
+                skip=true; break
+            fi
+        done
+        [[ "$skip" == "true" ]] && continue
+        [[ "$(basename "$path")" == "setup.sh" ]] && continue
+
+        # Feedback de progresso
+        ((count++))
+        if [[ $((count % 5)) -eq 0 ]]; then
+            # Se tivermos função de spinner/progresso, usar aqui.
+            # Por enquanto, apenas debug ou nada para não sujar TUI se não for wizard.
+            msg_debug "Analisando remoto ($count): $path"
+        fi
+
+        # Download do cabeçalho apenas (Range header seria ideal, mas GitHub raw pode não suportar bem partial.
+        # Vamos baixar primeiras linhas com curl piped to head se possível, ou full file se pequeno)
+        # O GitHub Raw suporta range? Geralmente sim.
+        local header
+        header=$(curl -fsSL -r 0-2000 "$raw_base/$path" 2>/dev/null || true)
+
+        _cs_parse_metadata "$header" "$path"
+
+    done <<< "$files"
+
+    rm -f "$json_tmp"
+}
+
+# ── Função Principal de Scan ─────────────────────────────────────────────────
 cs_registry_scan() {
     local base_dir="${1:-.}"
 
-    if [[ "${REMOTE_MODE:-}" != "1" ]]; then
-        if [[ -z "$base_dir" || ! -d "$base_dir" ]]; then
-            msg_warn "Diretório base inválido para registry: '${base_dir:-<vazio>}'"
-            return 0
-        fi
-    fi
+    # Resetar registro
+    CS_REGISTRY_FILES=()
 
     if [[ "${REMOTE_MODE:-}" == "1" ]]; then
-        msg_debug "Registry em modo remoto — consultando GitHub API..."
-        CS_REGISTRY_FILES=()
-
-        if ! check_command curl; then
-            msg_warn "curl não encontrado; registry remoto indisponível."
-            return 0
-        fi
-
-        local api_url="${REMOTE_API_BASE:-https://api.github.com/repos/gutierrezx7/custom_scripts/git/trees/main?recursive=1}"
-        local tmp
-        if ! tmp=$(mktemp 2>/dev/null); then
-            msg_warn "Falha ao criar arquivo temporário; registry remoto indisponível."
-            return 0
-        fi
-        if ! curl -fsS "$api_url" -o "$tmp"; then
-            msg_warn "Falha ao consultar GitHub API; registry remoto não disponível."
-            rm -f "$tmp"
-            return 0
-        fi
-
-        local count=0
-        msg_step "Analisando scripts remotos (pode demorar um pouco)..."
-
-        while IFS= read -r path; do
-            local skip=false
-            for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
-                if [[ "$path" == "$ignore/"* || "$path" == "$ignore" ]]; then
-                    skip=true; break
-                fi
-            done
-            [[ "$skip" == "true" ]] && continue
-
-            if [[ "$(basename "$path")" == "setup.sh" ]]; then continue; fi
-
-            # Feedback visual (progresso simples)
-            ((count++))
-            if [[ $((count % 5)) -eq 0 ]]; then
-                printf "\r${CS_CYAN}  ➜${CS_NC} Analisando script #%d..." "$count"
-            fi
-
-            local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
-            local header
-            header=$( (curl -fsS --max-time 10 "$raw_url" 2>/dev/null | sed -n '1,30p') || true )
-
-            local title desc supported interactive reboot network version tags dryrun category
-            title=$(echo "$header" | grep -i '^# Title:' | sed 's/^# Title:[[:space:]]*//I' | head -1)
-            [[ -z "$title" ]] && continue
-            desc=$(echo "$header" | grep -i '^# Description:' | sed 's/^# Description:[[:space:]]*//I' | head -1)
-            supported=$(echo "$header" | grep -i '^# Supported:' | sed 's/^# Supported:[[:space:]]*//I' | head -1)
-            interactive=$(echo "$header" | grep -i '^# Interactive:' | sed 's/^# Interactive:[[:space:]]*//I' | head -1)
-            reboot=$(echo "$header" | grep -i '^# Reboot:' | sed 's/^# Reboot:[[:space:]]*//I' | head -1)
-            network=$(echo "$header" | grep -i '^# Network:' | sed 's/^# Network:[[:space:]]*//I' | head -1)
-            version=$(echo "$header" | grep -i '^# Version:' | sed 's/^# Version:[[:space:]]*//I' | head -1)
-            tags=$(echo "$header" | grep -i '^# Tags:' | sed 's/^# Tags:[[:space:]]*//I' | head -1)
-            dryrun=$(echo "$header" | grep -i '^# DryRun:' | sed 's/^# DryRun:[[:space:]]*//I' | head -1)
-
-            category=$(dirname "$path")
-
-            [[ -z "$supported" ]] && supported="ALL"
-            [[ -z "$interactive" ]] && interactive="no"
-            [[ -z "$reboot" ]] && reboot="no"
-            [[ -z "$network" ]] && network="safe"
-            [[ -z "$version" ]] && version="1.0"
-            [[ -z "$dryrun" ]] && dryrun="no"
-
-            CS_REGISTRY_FILES+=("$path")
-            CS_REGISTRY_TITLE["$path"]="$title"
-            CS_REGISTRY_DESC["$path"]="${desc:-$title}"
-            CS_REGISTRY_SUPPORTED["$path"]="$supported"
-            # shellcheck disable=SC2034
-            CS_REGISTRY_INTERACTIVE["$path"]="$interactive"
-            # shellcheck disable=SC2034
-            CS_REGISTRY_REBOOT["$path"]="$reboot"
-            # shellcheck disable=SC2034
-            CS_REGISTRY_NETWORK["$path"]="$network"
-            CS_REGISTRY_CATEGORY["$path"]="$category"
-            CS_REGISTRY_VERSION["$path"]="$version"
-            # shellcheck disable=SC2034
-            CS_REGISTRY_TAGS["$path"]="$tags"
-            # shellcheck disable=SC2034
-            CS_REGISTRY_DRYRUN["$path"]="$dryrun"
-        done < <(grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' || true)
-
-        rm -f "$tmp"
-        msg_debug "Registry remoto: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
-        return 0
-    fi
-
-    CS_REGISTRY_FILES=()
-    while IFS= read -r -d '' dir; do
-        local dirname
-        dirname=$(basename "$dir")
-
-        local skip=false
-        for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
-            [[ "$dirname" == "$ignore" ]] && skip=true && break
-        done
-        [[ "$skip" == "true" ]] && continue
-
-        _cs_scan_directory "$dir"
-    done < <(find "$base_dir" -maxdepth 1 -type d -not -path '*/.*' -not -path "$base_dir" -print0 | sort -z)
-
-    msg_debug "Registry: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
-}
-
-cs_fetch_script_to_temp() {
-    local path="$1"
-    local tmp
-    tmp=$(mktemp /tmp/custom_scripts.XXXXXX.sh)
-    local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
-    if curl -fsS "$raw_url" -o "$tmp"; then
-        chmod +x "$tmp"
-        echo "$tmp"
-        return 0
+        _cs_scan_remote
     else
-        rm -f "$tmp"
-        return 1
+        _cs_scan_local "$base_dir"
     fi
+
+    msg_debug "Registry carregado: ${#CS_REGISTRY_FILES[@]} scripts."
 }
 
-# ── Filtro por ambiente ──────────────────────────────────────────────────────
-# Retorna apenas scripts compatíveis com o ambiente detectado.
+# ── Filtrar por Compatibilidade ──────────────────────────────────────────────
+# Remove do array CS_REGISTRY_FILES os scripts incompatíveis
 cs_registry_filter_env() {
-    local env_type="${1:-$CS_ENV_TYPE}"
+    local env_type="${1:-$CS_ENV_TYPE}" # (Legado, agora usamos lib/system.sh)
+
+    # Garantir que system.sh detectou algo
+    if [[ -z "${CS_VIRT_TYPE:-}" ]]; then
+        if command -v cs_system_detect &>/dev/null; then
+            cs_system_detect
+        else
+            msg_warn "lib/system.sh não carregado ou falhou. Assumindo VM/Debian genérico."
+            CS_VIRT_TYPE="vm"
+            CS_OS="debian"
+        fi
+    fi
+
     local filtered=()
 
     for file in "${CS_REGISTRY_FILES[@]}"; do
         local supported="${CS_REGISTRY_SUPPORTED[$file]}"
 
-        # ALL é sempre compatível
-        if [[ "$supported" == "ALL" ]]; then
-            filtered+=("$file")
-            continue
-        fi
+        # Usar a função robusta de system.sh
+        # supported format: "lxc,vm" (virt)
+        # Se tivéssemos OS supported também (ex: "# SupportedOS: debian"), passaríamos aqui.
+        # Por enquanto, assumimos que 'Supported' refere-se à virtualização.
 
-        # Verificar se o ambiente está na lista
-        case "$env_type" in
-            LXC)
-                [[ "$supported" == *"LXC"* ]] && filtered+=("$file")
-                ;;
-            VM|Bare-Metal)
-                [[ "$supported" == *"VM"* || "$supported" == *"ALL"* ]] && filtered+=("$file")
-                ;;
-            *)
-                filtered+=("$file") # Se desconhecido, mostra tudo
-                ;;
-        esac
+        if cs_system_check_compatibility "$supported" "all"; then
+            filtered+=("$file")
+        else
+            msg_debug "Filtrado (Incompatível): $(basename "$file") [Req: $supported vs Sys: $CS_VIRT_TYPE]"
+        fi
     done
 
     CS_REGISTRY_FILES=("${filtered[@]}")
-    msg_debug "Registry filtrado: ${#CS_REGISTRY_FILES[@]} scripts para $env_type."
+    msg_debug "Scripts compatíveis após filtro: ${#CS_REGISTRY_FILES[@]}"
 }
 
-# ── Listar categorias disponíveis ────────────────────────────────────────────
-cs_registry_categories() {
+# ── Helpers de Acesso ────────────────────────────────────────────────────────
+
+cs_registry_get_categories() {
     local -A seen
+    local categories=()
     for file in "${CS_REGISTRY_FILES[@]}"; do
         local cat="${CS_REGISTRY_CATEGORY[$file]}"
         if [[ -z "${seen[$cat]:-}" ]]; then
-            echo "$cat"
+            categories+=("$cat")
             seen["$cat"]=1
         fi
     done
+    # Sort
+    printf "%s\n" "${categories[@]}" | sort
 }
 
-# ── Listar scripts por categoria ────────────────────────────────────────────
-cs_registry_by_category() {
-    local category="$1"
+cs_registry_get_by_category() {
+    local target_cat="$1"
     for file in "${CS_REGISTRY_FILES[@]}"; do
-        [[ "${CS_REGISTRY_CATEGORY[$file]}" == "$category" ]] && echo "$file"
-    done
-}
-
-# ── Obter label amigável da categoria ───────────────────────────────────────
-cs_category_label() {
-    local cat="$1"
-    echo "${CS_CATEGORY_LABELS[$cat]:-${cat}}"
-}
-
-# ── Listar scripts (formato texto para --list) ──────────────────────────────
-cs_registry_print() {
-    local current_cat=""
-    local sorted_files=()
-
-    # Ordenar por categoria
-    while IFS= read -r cat; do
-        while IFS= read -r file; do
-            sorted_files+=("$file")
-        done < <(cs_registry_by_category "$cat")
-    done < <(cs_registry_categories)
-
-    for file in "${sorted_files[@]}"; do
-        local cat="${CS_REGISTRY_CATEGORY[$file]}"
-        local title="${CS_REGISTRY_TITLE[$file]}"
-        local desc="${CS_REGISTRY_DESC[$file]}"
-        local version="${CS_REGISTRY_VERSION[$file]}"
-        local supported="${CS_REGISTRY_SUPPORTED[$file]}"
-
-        if [[ "$cat" != "$current_cat" ]]; then
-            current_cat="$cat"
-            echo ""
-            echo -e "${CS_BOLD}$(cs_category_label "$cat")${CS_NC}"
-            printf "  %-30s %-40s %-6s %s\n" "SCRIPT" "DESCRIÇÃO" "VER" "AMBIENTE"
-            printf "  %-30s %-40s %-6s %s\n" "──────" "─────────" "───" "────────"
+        if [[ "${CS_REGISTRY_CATEGORY[$file]}" == "$target_cat" ]]; then
+            echo "$file"
         fi
-
-        local basename_file
-        basename_file=$(basename "$file")
-        printf "  %-30s %-40s %-6s %s\n" \
-            "$basename_file" \
-            "${desc:0:38}" \
-            "v${version}" \
-            "$supported"
     done
-    echo ""
 }
