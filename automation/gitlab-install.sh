@@ -27,11 +27,21 @@ MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 if [ "$MEM_KB" -lt 4000000 ]; then
     echo -e "${YELLOW}AVISO: O GitLab requer pelo menos 4GB de RAM. Detectado: $(($MEM_KB / 1024))MB.${NC}"
     echo -e "${YELLOW}A instalação pode falhar ou o sistema ficar instável.${NC}"
-    read -p "Deseja continuar mesmo assim? (s/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Ss]$ ]]; then
-        echo -e "${RED}Instalação cancelada.${NC}"
+
+    # Se for Dry-Run, apenas avisar e continuar
+    if [[ "${CS_DRY_RUN:-}" == "true" ]]; then
+        echo -e "${YELLOW}[DRY-RUN] Ignorando verificação de memória.${NC}"
+    # Se não for interativo, abortar (a menos que forçado, mas aqui é seguro falhar)
+    elif [[ ! -t 0 ]]; then
+        echo -e "${RED}Ambiente não interativo e memória insuficiente. Abortando.${NC}"
         exit 1
+    else
+        read -p "Deseja continuar mesmo assim? (s/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+            echo -e "${RED}Instalação cancelada.${NC}"
+            exit 1
+        fi
     fi
 fi
 
