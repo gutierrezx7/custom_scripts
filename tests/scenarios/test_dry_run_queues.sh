@@ -68,7 +68,7 @@ mkdir -p "$TEST_TEMP_DIR/.git"
 sed -i '2i source "'"$ROOT_DIR/tests/lib/mock_sys.sh"'"' "$TEST_TEMP_DIR/setup.sh"
 
 # Execute
-cd "$TEST_TEMP_DIR"
+cd "$TEST_TEMP_DIR" || exit 1
 ./setup.sh > "$TEST_TEMP_DIR/output.log" 2>&1
 
 # Assertions

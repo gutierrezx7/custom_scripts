@@ -22,6 +22,7 @@ set -eo pipefail
 REPO_URL="https://github.com/gutierrezx7/custom_scripts.git"
 INSTALL_DIR="${CS_INSTALL_DIR:-/opt/custom_scripts}"
 VERSION="2.1.0"
+# shellcheck disable=SC2034
 BUILD_DATE="2026-02-11"
 
 # Debug opcional (export CS_DEBUG=1)

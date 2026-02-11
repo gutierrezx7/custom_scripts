@@ -11,13 +11,21 @@ readonly _CS_REGISTRY_LOADED=1
 
 # ── Arrays globais do registro ───────────────────────────────────────────────
 declare -a CS_REGISTRY_FILES=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_TITLE=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_DESC=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_SUPPORTED=()    # "lxc,vm" etc
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_INTERACTIVE=()  # "yes" or "no"
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_REBOOT=()       # "yes" or "no"
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_NETWORK=()      # "safe" or "risk"
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_CATEGORY=()
+# shellcheck disable=SC2034
 declare -A CS_REGISTRY_VERSION=()
 
 # Diretórios e arquivos a ignorar
@@ -196,6 +204,7 @@ cs_registry_scan() {
 # ── Filtrar por Compatibilidade ──────────────────────────────────────────────
 # Remove do array CS_REGISTRY_FILES os scripts incompatíveis
 cs_registry_filter_env() {
+    # shellcheck disable=SC2034
     local env_type="${1:-$CS_ENV_TYPE}" # (Legado, agora usamos lib/system.sh)
 
     # Garantir que system.sh detectou algo
@@ -205,6 +214,7 @@ cs_registry_filter_env() {
         else
             msg_warn "lib/system.sh não carregado ou falhou. Assumindo VM/Debian genérico."
             CS_VIRT_TYPE="vm"
+            # shellcheck disable=SC2034
             CS_OS="debian"
         fi
     fi

@@ -190,6 +190,7 @@ cs_run_batch() {
 
     for file in "${selected_files[@]}"; do
         local interactive="${CS_REGISTRY_INTERACTIVE[$file]}"
+        # shellcheck disable=SC2034
         local network="${CS_REGISTRY_NETWORK[$file]}"
         local risk="${CS_REGISTRY_NETWORK[$file]}" # network=risk é o principal risco
 
