@@ -208,9 +208,10 @@ show_menu() {
     term_h=$(tput lines 2>/dev/null || echo 24)
     term_w=$(tput cols 2>/dev/null || echo 80)
 
-    local box_h=$((term_h - 4)); [[ $box_h -lt 12 ]] && box_h=12
+    local box_h=$((term_h - 4)); [[ $box_h -lt 14 ]] && box_h=14
     local box_w=$((term_w - 4)); [[ $box_w -lt 60 ]] && box_w=60
-    local list_h=$((box_h - 8)); [[ $list_h -lt 5 ]] && list_h=5
+    # list_h precisa de margem para texto (3 linhas) + borders/buttons (~7 linhas) = 10
+    local list_h=$((box_h - 10)); [[ $list_h -lt 4 ]] && list_h=4
     local max_title=$((box_w - 45)); [[ $max_title -lt 20 ]] && max_title=20
 
     # Construir itens do menu agrupados por categoria
@@ -253,12 +254,29 @@ show_menu() {
 
     # Mostrar menu
     local choices
+    local exit_code=0
+
+    # Captura saída e exit code separadamente
     choices=$(whiptail \
         --title "$menu_title" \
         --checklist "Selecione com ESPAÇO, confirme com ENTER:\n\n[I] = Interativo  [R] = Reboot  [!] = Risco de Rede" \
         "$box_h" "$box_w" "$list_h" \
         "${whip_args[@]}" \
-        3>&1 1>&2 2>&3) || return 0
+        3>&1 1>&2 2>&3) || exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        # Se usuário cancelou (1) ou ESC (255), retorna silenciosamente
+        # Mas se for erro de geometria ou outro erro, mostra alerta se houver output
+        if [[ $exit_code -eq 1 || $exit_code -eq 255 ]]; then
+            return 0
+        fi
+
+        msg_error "Erro ao abrir menu (exit code: $exit_code):"
+        echo "$choices"
+        echo ""
+        msg_warn "Seu terminal pode estar muito pequeno. Tente maximizar a janela."
+        return 0
+    fi
 
     # Remover aspas
     choices=$(echo "$choices" | tr -d '"')
@@ -442,9 +460,9 @@ run_wizard() {
     local term_h term_w
     term_h=$(tput lines 2>/dev/null || echo 24)
     term_w=$(tput cols 2>/dev/null || echo 80)
-    local box_h=$((term_h - 4)); [[ $box_h -lt 12 ]] && box_h=12
+    local box_h=$((term_h - 4)); [[ $box_h -lt 14 ]] && box_h=14
     local box_w=$((term_w - 4)); [[ $box_w -lt 60 ]] && box_w=60
-    local list_h=$((box_h - 8)); [[ $list_h -lt 5 ]] && list_h=5
+    local list_h=$((box_h - 10)); [[ $list_h -lt 4 ]] && list_h=4
     local max_title=$((box_w - 45)); [[ $max_title -lt 20 ]] && max_title=20
 
     local whip_args=()
@@ -470,12 +488,21 @@ run_wizard() {
 
     local choices=""
     if [[ ${#whip_args[@]} -gt 0 ]]; then
+        local exit_code=0
         choices=$(whiptail \
             --title "Wizard - Selecionar Scripts [${CS_ENV_TYPE}]" \
             --checklist "Selecione scripts adicionais para instalar:\n(ESPAÇO = selecionar, ENTER = confirmar, vazio = pular)" \
             "$box_h" "$box_w" "$list_h" \
             "${whip_args[@]}" \
-            3>&1 1>&2 2>&3) || choices=""
+            3>&1 1>&2 2>&3) || exit_code=$?
+
+        if [[ $exit_code -ne 0 && $exit_code -ne 1 && $exit_code -ne 255 ]]; then
+            msg_warn "Falha ao abrir menu de seleção (código $exit_code)."
+            echo "$choices"
+            choices=""
+        elif [[ $exit_code -ne 0 ]]; then
+            choices=""
+        fi
     fi
 
     local selected_files=()
