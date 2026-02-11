@@ -136,16 +136,25 @@ cs_registry_scan() {
             return 0
         fi
 
-        grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' || true | while IFS= read -r path; do
+        local count=0
+        msg_step "Analisando scripts remotos (pode demorar um pouco)..."
+
+        while IFS= read -r path; do
             local skip=false
             for ignore in "${CS_REGISTRY_IGNORE_DIRS[@]}"; do
-                if [[ "$path" == "$ignore/*" || "$path" == "$ignore" ]]; then
+                if [[ "$path" == "$ignore/"* || "$path" == "$ignore" ]]; then
                     skip=true; break
                 fi
             done
             [[ "$skip" == "true" ]] && continue
 
             if [[ "$(basename "$path")" == "setup.sh" ]]; then continue; fi
+
+            # Feedback visual (progresso simples)
+            ((count++))
+            if [[ $((count % 5)) -eq 0 ]]; then
+                printf "\r${CS_CYAN}  ➜${CS_NC} Analisando script #%d..." "$count"
+            fi
 
             local raw_url="${REMOTE_RAW_BASE:-https://raw.githubusercontent.com/gutierrezx7/custom_scripts/main}/$path"
             local header
@@ -188,7 +197,7 @@ cs_registry_scan() {
             CS_REGISTRY_TAGS["$path"]="$tags"
             # shellcheck disable=SC2034
             CS_REGISTRY_DRYRUN["$path"]="$dryrun"
-        done
+        done < <(grep -o '"path": *"[^"]*\.sh"' "$tmp" | sed 's/"path": *"//;s/"$//' || true)
 
         rm -f "$tmp"
         msg_debug "Registry remoto: ${#CS_REGISTRY_FILES[@]} scripts encontrados."
