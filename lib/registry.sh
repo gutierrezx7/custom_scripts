@@ -70,12 +70,19 @@ _cs_parse_metadata() {
 
     # Salvar no registro
     CS_REGISTRY_FILES+=("$file_path")
+    # shellcheck disable=SC2034
     CS_REGISTRY_TITLE["$file_path"]="$title"
+    # shellcheck disable=SC2034
     CS_REGISTRY_DESC["$file_path"]="$desc"
+    # shellcheck disable=SC2034
     CS_REGISTRY_SUPPORTED["$file_path"]="$supported"
+    # shellcheck disable=SC2034
     CS_REGISTRY_INTERACTIVE["$file_path"]="$interactive"
+    # shellcheck disable=SC2034
     CS_REGISTRY_REBOOT["$file_path"]="$reboot"
+    # shellcheck disable=SC2034
     CS_REGISTRY_NETWORK["$file_path"]="$network"
+    # shellcheck disable=SC2034
     CS_REGISTRY_VERSION["$file_path"]="$version"
 
     # Categoria baseada no diretório pai
